@@ -37,10 +37,10 @@ export class MemStorage implements IStorage {
 
   private initializePersonalityTypes() {
     const types = [
-      { name: "Analysts", code: "NT • INTP • ENTP • ENTJ", description: "Rational and impartial, they excel at intellectual debates and scientific or technological fields." },
-      { name: "Diplomats", code: "NF • INFP • ENFP • INFJ", description: "Warm and empathetic, they help and inspire others while working toward personal growth and greater good." },
-      { name: "Sentinels", code: "SJ • ISTJ • ISFJ • ESTJ", description: "Practical and fact-minded, they are reliable and strive to uphold traditions and order." },
-      { name: "Explorers", code: "SP • ISTP • ISFP • ESTP", description: "Spontaneous and flexible, they tend to be resourceful and focus on making things happen." }
+      { name: "Analysts", code: "NT • INTP • ENTP • ENTJ", description: "Think critically and strategically, excelling in complex problem-solving and innovation." },
+      { name: "Diplomats", code: "NF • INFP • ENFP • INFJ", description: "Focus on human potential and meaningful connections, inspiring positive change." },
+      { name: "Sentinels", code: "SJ • ISTJ • ISFJ • ESTJ", description: "Value stability and order, creating reliable systems and maintaining traditions." },
+      { name: "Explorers", code: "SP • ISTP • ISFP • ESTP", description: "Embrace spontaneity and adaptability, thriving in dynamic environments." }
     ];
 
     types.forEach(type => {
@@ -73,9 +73,9 @@ export class MemStorage implements IStorage {
   async createChatSession(insertSession: InsertChatSession): Promise<ChatSession> {
     const id = this.currentChatSessionId++;
     const session: ChatSession = { 
-      ...insertSession, 
       id, 
       userId: null, 
+      personalityType: insertSession.personalityType || null,
       createdAt: new Date() 
     };
     this.chatSessions.set(id, session);
@@ -89,8 +89,10 @@ export class MemStorage implements IStorage {
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
     const id = this.currentMessageId++;
     const message: Message = { 
-      ...insertMessage, 
       id, 
+      chatSessionId: insertMessage.chatSessionId || null,
+      content: insertMessage.content,
+      isUser: insertMessage.isUser,
       createdAt: new Date() 
     };
     this.messages.set(id, message);

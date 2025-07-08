@@ -5,7 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Compass, Plus, Send, User, Settings, HelpCircle, LogOut, Moon, Sun } from "lucide-react";
 import type { PersonalityType, ChatSession, Message } from "@shared/schema";
 
@@ -16,6 +18,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
+  const { theme, toggleTheme } = useTheme();
 
   // Fetch personality types
   const { data: personalityTypes } = useQuery<PersonalityType[]>({
@@ -83,9 +86,7 @@ export default function ChatPage() {
   };
 
   const handleNewChat = () => {
-    setCurrentSessionId(null);
-    setSelectedPersonalityType("");
-    setMessages([]);
+    window.location.reload();
   };
 
   const handleUnknownPersonalityType = () => {
@@ -102,9 +103,9 @@ export default function ChatPage() {
   }, [messageInput]);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <div className="w-64 bg-gradient-to-b from-purple-600 to-purple-800 flex flex-col">
+      <div className="w-64 bg-gradient-to-b from-purple-700 to-purple-900 dark:from-purple-800 dark:to-purple-950 flex flex-col h-full">
         <div className="p-6">
           <Button
             onClick={handleNewChat}
@@ -122,10 +123,20 @@ export default function ChatPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="bg-white shadow-sm px-6 py-4 flex justify-between items-center">
+        <div className="bg-background dark:bg-background shadow-sm px-6 py-4 flex justify-between items-center border-b border-border">
           <div className="flex items-center gap-2">
-            <Moon className="w-5 h-5 text-gray-600" />
-            <Sun className="w-5 h-5 text-gray-600" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="h-8 w-8"
+            >
+              {theme === "light" ? (
+                <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              ) : (
+                <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              )}
+            </Button>
           </div>
           
           <DropdownMenu>
@@ -142,20 +153,20 @@ export default function ChatPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert("Profile functionality coming soon!")}>
                 <User className="w-4 h-4 mr-2" />
                 My Profile
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert("Settings functionality coming soon!")}>
                 <Settings className="w-4 h-4 mr-2" />
                 Settings
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => alert("Help functionality coming soon!")}>
                 <HelpCircle className="w-4 h-4 mr-2" />
                 Help
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600">
+              <DropdownMenuItem className="text-red-600" onClick={() => alert("Logout functionality coming soon!")}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Log Out
               </DropdownMenuItem>
@@ -183,39 +194,47 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              <p className="text-gray-600 text-center max-w-md mb-12">
+              <p className="text-gray-600 dark:text-gray-300 text-center max-w-md mb-12">
                 The chatbot designed to give you advice on the Hunter major that best suits your interests and personality
               </p>
 
               {/* Personality Type Selection */}
               <div className="w-full max-w-2xl">
-                <h3 className="text-gray-700 text-center mb-6">Choose your personality type:</h3>
+                <h3 className="text-gray-700 dark:text-gray-300 text-center mb-6">Choose your personality type:</h3>
                 
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   {personalityTypes?.map((type) => (
-                    <Button
-                      key={type.id}
-                      variant="outline"
-                      className={`p-4 h-auto text-left justify-start hover:border-purple-400 hover:bg-purple-50 ${
-                        selectedPersonalityType === type.name.toLowerCase()
-                          ? "border-purple-500 bg-purple-100"
-                          : ""
-                      }`}
-                      onClick={() => handlePersonalityTypeSelect(type.name.toLowerCase())}
-                    >
-                      <div>
-                        <div className="font-semibold text-gray-800">{type.name}</div>
-                        <div className="text-sm text-gray-600">{type.code}</div>
-                      </div>
-                    </Button>
+                    <Tooltip key={type.id}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={`p-4 h-auto text-left justify-start hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950 ${
+                            selectedPersonalityType === type.name.toLowerCase()
+                              ? "border-purple-500 bg-purple-100 dark:bg-purple-900"
+                              : ""
+                          }`}
+                          onClick={() => handlePersonalityTypeSelect(type.name.toLowerCase())}
+                          disabled={sendMessageMutation.isPending || createSessionMutation.isPending}
+                        >
+                          <div>
+                            <div className="font-semibold text-gray-800 dark:text-gray-200">{type.name}</div>
+                            <div className="text-sm text-gray-600 dark:text-gray-400">{type.code}</div>
+                          </div>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">{type.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
                   ))}
                 </div>
                 
                 <div className="text-center">
                   <Button
                     variant="link"
-                    className="text-purple-600 hover:text-purple-800 font-medium underline"
+                    className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 font-medium underline"
                     onClick={handleUnknownPersonalityType}
+                    disabled={sendMessageMutation.isPending || createSessionMutation.isPending}
                   >
                     I Don't know my personality type
                   </Button>
@@ -237,7 +256,7 @@ export default function ChatPage() {
                       className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                         message.isUser
                           ? "bg-purple-600 text-white"
-                          : "bg-gray-200 text-gray-800"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
                       }`}
                     >
                       {message.content}
@@ -250,7 +269,7 @@ export default function ChatPage() {
         </div>
 
         {/* Message Input */}
-        <div className="bg-white border-t border-gray-200 p-6">
+        <div className="bg-background dark:bg-background border-t border-border p-6">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end gap-4">
               <div className="flex-1">
