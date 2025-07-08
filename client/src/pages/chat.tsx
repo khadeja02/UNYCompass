@@ -16,6 +16,7 @@ export default function ChatPage() {
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingMessage, setPendingMessage] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
@@ -41,6 +42,14 @@ export default function ChatPage() {
       setMessages(sessionMessages);
     }
   }, [sessionMessages]);
+
+  // Send pending message when session is created
+  useEffect(() => {
+    if (currentSessionId && pendingMessage) {
+      sendMessageMutation.mutate(pendingMessage);
+      setPendingMessage("");
+    }
+  }, [currentSessionId, pendingMessage]);
 
   // Create chat session mutation
   const createSessionMutation = useMutation({
@@ -80,9 +89,17 @@ export default function ChatPage() {
   };
 
   const handleSendMessage = () => {
-    if (messageInput.trim() && currentSessionId) {
-      sendMessageMutation.mutate(messageInput.trim());
+    if (!messageInput.trim()) return;
+    
+    // If no session exists, create one with "unknown" personality type
+    if (!currentSessionId) {
+      setSelectedPersonalityType("unknown");
+      setPendingMessage(messageInput.trim());
+      createSessionMutation.mutate("unknown");
+      return;
     }
+    
+    sendMessageMutation.mutate(messageInput.trim());
   };
 
   const handleNewChat = () => {
@@ -290,7 +307,7 @@ export default function ChatPage() {
               </div>
               <Button
                 onClick={handleSendMessage}
-                disabled={!messageInput.trim() || !currentSessionId || sendMessageMutation.isPending}
+                disabled={!messageInput.trim() || sendMessageMutation.isPending || createSessionMutation.isPending}
                 className="bg-purple-600 hover:bg-purple-700 text-white p-3"
               >
                 <Send className="w-4 h-4" />
