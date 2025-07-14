@@ -1,323 +1,195 @@
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { apiRequest } from "@/lib/queryClient";
+// client/src/pages/chat.tsx - Refactored with components
+import { useState, useRef, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Compass, Plus, Send, User, Settings, HelpCircle, LogOut, Moon, Sun } from "lucide-react";
-import type { PersonalityType, ChatSession, Message } from "@shared/schema";
+import { apiRequest } from '@/lib/queryClient';
+import type { Message } from '@shared/schema';
+import type { PersonalityGroup } from '@/lib/personalityData';
+
+// Import our new components
+import { ChatSidebar } from "@/components/ui/ChatSidebar";
+import { ChatHeader } from "@/components/ui/ChatHeader";
+import { ChatInput } from "@/components/ui/ChatInput";
+import { PersonalitySelector } from "@/components/ui/PersonalitySelector";
 
 export default function ChatPage() {
-  const [selectedPersonalityType, setSelectedPersonalityType] = useState<string>("");
-  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
-  const [messageInput, setMessageInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [pendingMessage, setPendingMessage] = useState<string>("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const queryClient = useQueryClient();
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
 
-  // Fetch personality types
-  const { data: personalityTypes } = useQuery<PersonalityType[]>({
-    queryKey: ["/api/personality-types"],
+  // State
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messageInput, setMessageInput] = useState("");
+  const [selectedPersonalityGroup, setSelectedPersonalityGroup] = useState<PersonalityGroup | null>(null);
+  const [chatbotStatus, setChatbotStatus] = useState({
+    status: 'checking' as 'online' | 'offline' | 'checking',
+    message: 'Connecting...'
   });
 
-  // Fetch chat sessions
-  const { data: chatSessions } = useQuery<ChatSession[]>({
-    queryKey: ["/api/chat-sessions"],
-  });
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages for current session
-  const { data: sessionMessages } = useQuery<Message[]>({
-    queryKey: ["/api/messages", currentSessionId],
-    enabled: !!currentSessionId,
-  });
-
+  // Check chatbot status
   useEffect(() => {
-    if (sessionMessages) {
-      setMessages(sessionMessages);
-    }
-  }, [sessionMessages]);
+    const checkStatus = async () => {
+      try {
+        const response = await apiRequest("GET", "/api/chatbot/status");
+        const data = await response.json();
+        setChatbotStatus({
+          status: data.pythonWorking ? 'online' : 'offline',
+          message: data.message
+        });
+      } catch (error) {
+        setChatbotStatus({ status: 'offline', message: 'Unable to connect' });
+      }
+    };
+    checkStatus();
+  }, []);
 
-  // Send pending message when session is created
-  useEffect(() => {
-    if (currentSessionId && pendingMessage) {
-      sendMessageMutation.mutate(pendingMessage);
-      setPendingMessage("");
-    }
-  }, [currentSessionId, pendingMessage]);
-
-  // Create chat session mutation
-  const createSessionMutation = useMutation({
-    mutationFn: async (personalityType: string) => {
-      const response = await apiRequest("POST", "/api/chat-sessions", {
-        personalityType,
-      });
-      return response.json();
-    },
-    onSuccess: (session: ChatSession) => {
-      setCurrentSessionId(session.id);
-      queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
-    },
-  });
-
-  // Send message mutation
+  // Send message to Hunter AI
   const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
-      if (!currentSessionId) return;
-      const response = await apiRequest("POST", "/api/messages", {
-        chatSessionId: currentSessionId,
-        content,
-        isUser: true,
+    mutationFn: async (data: { question: string; personalityType?: string }) => {
+      const response = await apiRequest("POST", "/api/chatbot/ask", {
+        question: data.question,
+        personalityType: data.personalityType || 'chatbot',
       });
       return response.json();
     },
-    onSuccess: (data) => {
-      setMessages(prev => [...prev, data.userMessage, data.aiResponse]);
-      setMessageInput("");
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
-    },
   });
 
-  const handlePersonalityTypeSelect = (type: string) => {
-    setSelectedPersonalityType(type);
-    createSessionMutation.mutate(type);
+  // Auto-scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = (content: string, personalityType?: string) => {
+    if (!content.trim()) return;
+
+    // Add user message immediately
+    const userMessage: Message = {
+      id: Date.now(),
+      chatSessionId: 0,
+      content: content,
+      isUser: true,
+      createdAt: new Date(),
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    // Send to Hunter AI
+    sendMessageMutation.mutate(
+      { question: content, personalityType },
+      {
+        onSuccess: (data) => {
+          const botMessage: Message = {
+            id: Date.now() + 1,
+            chatSessionId: 0,
+            content: data.success ? data.answer : `❌ Error: ${data.error || 'Failed to get response'}`,
+            isUser: false,
+            createdAt: new Date(),
+          };
+          setMessages(prev => [...prev, botMessage]);
+        },
+        onError: (error: any) => {
+          const errorMessage: Message = {
+            id: Date.now() + 1,
+            chatSessionId: 0,
+            content: `❌ ${error.message || 'Network error'}`,
+            isUser: false,
+            createdAt: new Date(),
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        }
+      }
+    );
   };
 
-  const handleSendMessage = () => {
-    if (!messageInput.trim()) return;
+  const handlePersonalitySelect = (personalityCode: string) => {
+    const prompt = `I am a ${personalityCode} personality type. Based on my personality, what Hunter College majors would you recommend for me and why?`;
+    handleSendMessage(prompt, personalityCode.toLowerCase());
+  };
 
-    // If no session exists, create one with "unknown" personality type
-    if (!currentSessionId) {
-      setSelectedPersonalityType("unknown");
-      setPendingMessage(messageInput.trim());
-      createSessionMutation.mutate("unknown");
-      return;
-    }
-
-    sendMessageMutation.mutate(messageInput.trim());
+  const handleUnknownPersonality = () => {
+    const prompt = "I don't know my personality type. Can you help me find a Hunter College major that might be right for me? What questions should I consider?";
+    handleSendMessage(prompt, 'unknown');
   };
 
   const handleNewChat = () => {
-    window.location.reload();
+    setMessages([]);
+    setMessageInput("");
+    setSelectedPersonalityGroup(null);
   };
 
-  const handleUnknownPersonalityType = () => {
-    setSelectedPersonalityType("unknown");
-    createSessionMutation.mutate("unknown");
+  const handleSuggestionClick = (suggestion: string) => {
+    handleSendMessage(suggestion);
   };
-
-  const handleLogout = () => {
-    logout();
-  };
-
-  // Auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
-    }
-  }, [messageInput]);
 
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <div className="w-64 bg-gradient-to-b from-purple-700 to-purple-900 dark:from-purple-800 dark:to-purple-950 flex flex-col h-full">
-        <div className="p-6">
-          <Button
-            onClick={handleNewChat}
-            className="w-full bg-black bg-opacity-20 hover:bg-opacity-30 text-white border-0"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
-        </div>
-        <div className="flex-1 px-6">
-          {/* Chat history would go here */}
-        </div>
-      </div>
+      <ChatSidebar
+        onNewChat={handleNewChat}
+        chatbotStatus={chatbotStatus}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="bg-background dark:bg-background shadow-sm px-6 py-4 flex justify-between items-center border-b border-border">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="h-8 w-8"
-            >
-              {theme === "light" ? (
-                <Moon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-              ) : (
-                <Sun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-              )}
-            </Button>
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 p-2">
-                <Avatar className="w-10 h-10">
-                  <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=40&h=40" />
-                  <AvatarFallback>{user?.username?.slice(0, 2).toUpperCase() || "UN"}</AvatarFallback>
-                </Avatar>
-                <div className="text-left">
-                  <div className="text-sm font-medium">{user?.username || "User"}</div>
-                  <div className="text-xs text-gray-500">{user?.email || "user@example.com"}</div>
-                </div>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => alert("Profile functionality coming soon!")}>
-                <User className="w-4 h-4 mr-2" />
-                My Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert("Settings functionality coming soon!")}>
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert("Help functionality coming soon!")}>
-                <HelpCircle className="w-4 h-4 mr-2" />
-                Help
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-red-600" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Log Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <ChatHeader
+          theme={theme}
+          toggleTheme={toggleTheme}
+          user={user}
+          logout={logout}
+        />
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col">
-          {!currentSessionId ? (
-            // Initial state with personality selection
-            <div className="flex-1 flex flex-col items-center justify-center p-8">
-              {/* Logo */}
-              <div className="mb-8">
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-16 h-16 rounded-full border-4 border-purple-600 flex items-center justify-center">
-                      <Compass className="text-purple-600 w-8 h-8" />
-                    </div>
-                  </div>
-                  <div>
-                    <h1 className="text-3xl font-bold text-purple-600">UNY</h1>
-                    <h2 className="text-xl font-semibold text-gray-600">COMPASS</h2>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-gray-600 dark:text-gray-300 text-center max-w-md mb-12">
-                The chatbot designed to give you advice on the Hunter major that best suits your interests and personality
-              </p>
-
-              {/* Personality Type Selection */}
-              <div className="w-full max-w-2xl">
-                <h3 className="text-gray-700 dark:text-gray-300 text-center mb-6">Choose your personality type:</h3>
-
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  {personalityTypes?.map((type) => (
-                    <Tooltip key={type.id}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={`p-4 h-auto text-left justify-start hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950 ${selectedPersonalityType === type.name.toLowerCase()
-                              ? "border-purple-500 bg-purple-100 dark:bg-purple-900"
-                              : ""
-                            }`}
-                          onClick={() => handlePersonalityTypeSelect(type.name.toLowerCase())}
-                          disabled={sendMessageMutation.isPending || createSessionMutation.isPending}
-                        >
-                          <div>
-                            <div className="font-semibold text-gray-800 dark:text-gray-200">{type.name}</div>
-                            <div className="text-sm text-gray-600 dark:text-gray-400">{type.code}</div>
-                          </div>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="max-w-xs">{type.description}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                </div>
-
-                <div className="text-center">
-                  <Button
-                    variant="link"
-                    className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 font-medium underline"
-                    onClick={handleUnknownPersonalityType}
-                    disabled={sendMessageMutation.isPending || createSessionMutation.isPending}
-                  >
-                    I Don't know my personality type
-                  </Button>
-                </div>
-              </div>
-            </div>
+        <div className="flex-1 flex flex-col min-h-0">
+          {messages.length === 0 ? (
+            // Welcome screen with personality selection
+            <PersonalitySelector
+              selectedPersonalityGroup={selectedPersonalityGroup}
+              setSelectedPersonalityGroup={setSelectedPersonalityGroup}
+              onPersonalitySelect={handlePersonalitySelect}
+              onUnknownPersonality={handleUnknownPersonality}
+              onSuggestionClick={handleSuggestionClick}
+              chatbotStatus={chatbotStatus}
+            />
           ) : (
             // Chat interface
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 p-6 overflow-y-auto min-h-0">
                 {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`mb-4 ${message.isUser ? "text-right" : "text-left"
-                      }`}
-                  >
-                    <div
-                      className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.isUser
-                          ? "bg-purple-600 text-white"
-                          : "bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                        }`}
-                    >
+                  <div key={message.id} className={`mb-4 ${message.isUser ? "text-right" : "text-left"}`}>
+                    <div className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.isUser ? "bg-purple-600 text-white" : "bg-gray-200 dark:bg-gray-700"
+                      }`}>
                       {message.content}
                     </div>
                   </div>
                 ))}
+
+                {sendMessageMutation.isPending && (
+                  <div className="text-left mb-4">
+                    <div className="inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                        <span className="text-gray-600 dark:text-gray-400">Hunter AI is thinking...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
               </div>
             </div>
           )}
         </div>
 
-        {/* Message Input */}
-        <div className="bg-background dark:bg-background border-t border-border p-6">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <Textarea
-                  ref={textareaRef}
-                  placeholder="Send a message..."
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  className="resize-none min-h-[44px] max-h-[120px]"
-                  rows={1}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
-              </div>
-              <Button
-                onClick={handleSendMessage}
-                disabled={!messageInput.trim() || sendMessageMutation.isPending || createSessionMutation.isPending}
-                className="bg-purple-600 hover:bg-purple-700 text-white p-3"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Message Input - Always visible */}
+        <ChatInput
+          messageInput={messageInput}
+          setMessageInput={setMessageInput}
+          onSendMessage={handleSendMessage}
+          isLoading={sendMessageMutation.isPending}
+          chatbotStatus={chatbotStatus}
+        />
       </div>
     </div>
   );
