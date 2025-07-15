@@ -1,0 +1,101 @@
+/* Move all HomePage-specific styles here */
+
+main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  padding: 20px;
+}
+
+.logo-container {
+  margin-bottom: 50px;
+  text-align: center;
+}
+
+.logo {
+  max-width: 600px;
+  width: 90%;
+  height: auto;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.3));
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #5f097caa);
+}
+
+.explore-btn {
+  background: #9B59B6;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 18px 50px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+  margin-top: 30px;
+}
+
+.explore-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: 0.5s;
+}
+
+.explore-btn:hover {
+  background: #8E44AD;
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.explore-btn:hover::before {
+  left: 100%;
+}
+/* Responsive design */
+@media (max-width: 768px) {
+  .logo {
+    max-width: 400px;
+  }
+  
+  .explore-btn {
+    padding: 15px 40px;
+    font-size: 1.2rem;
+  }
+  
+  .auth-btn {
+    padding: 8px 20px;
+    font-size: 0.9rem;
+  }
+}
+/* Login button specific styles */
+.login-btn {
+  background: rgba(149, 52, 219, 0.85) !important; 
+  border-color: rgba(92, 0, 138, 0.9);
+}
+
+.login-btn:hover {
+  background: rgba(105, 29, 156, 0.95) !important;
+}
+
+/* Register button specific styles */
+.register-btn {
+  background: rgba(51, 73, 182, 0.85) !important; 
+  border-color: rgba(0, 54, 90, 0.9);
+}
+
+.register-btn:hover {
+  background: rgba(27, 23, 148, 0.95) !important; 
+}
+
+/* ... other homepage-specific styles ... */

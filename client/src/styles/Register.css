@@ -1,0 +1,160 @@
+/* Move all Register-specific styles here */
+.register-app {
+  background: linear-gradient(135deg, #8301ba, #e0b5f2, #1a0124);
+}
+
+.register-app {
+  background: linear-gradient(135deg, #8301ba, #e0b5f2, #1a0124);
+}
+
+.register-main {
+  padding-top: 30px;
+}
+
+.register-form-container {
+  max-width: 500px;
+  width: 90%;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Additional styles for register page */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.form-control {
+  padding: 15px 20px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #9B59B6;
+  box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.3);
+}
+
+.form-control::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.form-links {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.form-links a {
+  color: #e0b5f2;
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.form-links a:hover {
+  color: white;
+  text-decoration: underline;
+}
+
+.left-link {
+  display: flex;
+  gap: 5px;
+  color: white;
+}
+
+.right-link {
+  text-align: right;
+}
+
+.register-submit-btn {
+  background: #9B59B6;
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 16px;
+  font-size: 1.3rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  position: relative;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.register-submit-btn:hover {
+  background: #8E44AD;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Responsive adjustments for register page */
+@media (max-width: 768px) {
+  .register-form-container {
+    padding: 30px;
+  }
+  
+  .form-links {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .left-link, .right-link {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .register-submit-btn {
+    padding: 14px;
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .register-form-container {
+    padding: 25px 20px;
+  }
+  
+  .form-control {
+    padding: 12px 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-form-container {
+    padding: 25px 20px;
+  }
+  
+  .form-control {
+    padding: 12px 15px;
+  }
+}
+
+/* ... other register-specific styles ... */
