@@ -53,6 +53,23 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   isUser: true,
 });
 
+// Extended interfaces for chatbot functionality
+export interface ChatbotRequest {
+  question: string;
+  personalityType?: string;
+}
+
+export interface ChatbotResponse {
+  success: boolean;
+  question: string;
+  answer: string;
+  user: string;
+  personalityType?: string;
+  timestamp: string;
+  error?: string;
+  details?: string;
+}
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type PersonalityType = typeof personalityTypes.$inferSelect;
@@ -60,4 +77,3 @@ export type ChatSession = typeof chatSessions.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type InsertChatSession = z.infer<typeof insertChatSessionSchema>;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
-
