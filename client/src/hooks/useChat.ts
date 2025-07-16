@@ -8,42 +8,49 @@ export const useChat = () => {
     const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
     const [messageInput, setMessageInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
-    const [pendingMessage, setPendingMessage] = useState<string>("");
-    const [isUsingChatbot, setIsUsingChatbot] = useState(false);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const queryClient = useQueryClient();
 
     // Fetch chat sessions
-    const { data: chatSessions } = useQuery<ChatSession[]>({
+    const { data: chatSessions = [] } = useQuery<ChatSession[]>({
         queryKey: ["/api/chat-sessions"],
+        queryFn: async () => {
+            const response = await apiRequest("GET", "/api/chat-sessions");
+            return response.json();
+        },
     });
 
     // Fetch messages for current session
-    const { data: sessionMessages } = useQuery<Message[]>({
+    const { data: sessionMessages = [] } = useQuery<Message[]>({
         queryKey: ["/api/messages", currentSessionId],
+        queryFn: async () => {
+            if (!currentSessionId) return [];
+            const response = await apiRequest("GET", `/api/messages/${currentSessionId}`);
+            return response.json();
+        },
         enabled: !!currentSessionId,
     });
 
     // Create chat session mutation
     const createSessionMutation = useMutation({
-        mutationFn: async (personalityType: string) => {
-            const response = await apiRequest("POST", "/api/chat-sessions", {
-                personalityType,
-            });
+        mutationFn: async (data: { personalityType?: string; title?: string }) => {
+            const response = await apiRequest("POST", "/api/chat-sessions", data);
             return response.json();
         },
         onSuccess: (session: ChatSession) => {
             setCurrentSessionId(session.id);
+            setMessages([]); // Clear messages for new session
             queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
         },
     });
 
-    // Send message mutation (personality system)
+    // Send message mutation - Uses the new backend with conversation context
     const sendMessageMutation = useMutation({
         mutationFn: async (content: string) => {
-            if (!currentSessionId) return;
+            if (!currentSessionId) throw new Error("No active session");
+
             const response = await apiRequest("POST", "/api/messages", {
                 chatSessionId: currentSessionId,
                 content,
@@ -52,17 +59,21 @@ export const useChat = () => {
             return response.json();
         },
         onSuccess: (data) => {
-            setMessages(prev => [...prev, data.userMessage, data.aiResponse]);
+            // Backend returns { userMessage, aiResponse }
+            if (data.userMessage && data.aiResponse) {
+                setMessages(prev => [...prev, data.userMessage, data.aiResponse]);
+            }
             setMessageInput("");
+
+            // Refresh session list to update timestamps
+            queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
             queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
         },
     });
 
-    // Update messages when session messages change
+    // Update messages when session messages change (when switching chats)
     useEffect(() => {
-        if (sessionMessages) {
-            setMessages(sessionMessages);
-        }
+        setMessages(sessionMessages);
     }, [sessionMessages]);
 
     // Auto-scroll to bottom
@@ -78,64 +89,52 @@ export const useChat = () => {
         }
     }, [messageInput]);
 
-    // Auto-send pending message when session is created (personality mode only)
-    useEffect(() => {
-        if (currentSessionId && currentSessionId > 0 && pendingMessage && !isUsingChatbot) {
-            console.log('Auto-sending pending message to personality system');
-            sendMessageMutation.mutate(pendingMessage);
-            setPendingMessage("");
+    // Handle send message
+    const handleSendMessage = async (content?: string, personalityType?: string) => {
+        const messageContent = content || messageInput.trim();
+        if (!messageContent) return;
+
+        // If no active session, create one first
+        if (!currentSessionId) {
+            try {
+                const session = await createSessionMutation.mutateAsync({
+                    personalityType,
+                    title: messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '') // Auto-generate title
+                });
+
+                // Session will be set in the onSuccess callback, then send message
+                setTimeout(() => {
+                    sendMessageMutation.mutate(messageContent);
+                }, 100);
+
+            } catch (error) {
+                console.error('Failed to create session:', error);
+            }
+        } else {
+            // Send to existing session
+            sendMessageMutation.mutate(messageContent);
         }
-    }, [currentSessionId, pendingMessage, isUsingChatbot, sendMessageMutation]);
-
-    // Handle send message (personality mode)
-    const handleSendMessage = () => {
-        if (!messageInput.trim()) return;
-
-        console.log('handleSendMessage:', { isUsingChatbot, currentSessionId });
-
-        // Skip if in chatbot mode (handled by useChatbot)
-        if (isUsingChatbot) {
-            console.log('Skipping personality system - in chatbot mode');
-            return;
-        }
-
-        console.log('Sending to personality system');
-
-        if (!currentSessionId || currentSessionId <= 0) {
-            console.log('Creating personality session first');
-            setPendingMessage(messageInput.trim());
-            // This will be handled by usePersonality hook
-            return;
-        }
-
-        console.log('Sending message via personality mutation');
-        sendMessageMutation.mutate(messageInput.trim());
     };
+
     // Handle new chat
     const handleNewChat = () => {
-        // Reset all state to initial values without page reload
         setCurrentSessionId(null);
         setMessageInput("");
         setMessages([]);
-        setPendingMessage("");
-        setIsUsingChatbot(false);
-
-        // Clear any query cache for the current session
-        queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
     };
 
-    // Combined send message handler for both modes
-    const handleSendMessageCombined = (
-        chatbotSendFunction?: (content: string) => void
-    ) => {
-        if (!messageInput.trim()) return;
+    // Handle chat selection (switch to existing chat)
+    const handleChatSelect = (chatId: number) => {
+        if (chatId === currentSessionId) return; // Already selected
 
-        if (isUsingChatbot && chatbotSendFunction) {
-            chatbotSendFunction(messageInput.trim());
-            setMessageInput(""); // Clear input immediately
-        } else {
-            handleSendMessage();
-        }
+        setCurrentSessionId(chatId);
+        setMessageInput("");
+        // Messages will be loaded by the useQuery effect
+    };
+
+    // Generate chat title from first message
+    const generateChatTitle = (firstMessage: string): string => {
+        return firstMessage.slice(0, 50) + (firstMessage.length > 50 ? '...' : '');
     };
 
     const isLoading = sendMessageMutation.isPending || createSessionMutation.isPending;
@@ -145,28 +144,21 @@ export const useChat = () => {
         currentSessionId,
         messageInput,
         messages,
-        pendingMessage,
-        isUsingChatbot,
 
         // Refs
         textareaRef,
         messagesEndRef,
 
         // Setters
-        setCurrentSessionId,
         setMessageInput,
-        setMessages,
-        setPendingMessage,
-        setIsUsingChatbot,
 
         // Data
         chatSessions,
 
         // Actions
         handleSendMessage,
-        handleSendMessageCombined,
         handleNewChat,
-        createSessionMutation,
+        handleChatSelect,
 
         // Loading states
         isLoading,

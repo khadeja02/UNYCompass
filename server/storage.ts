@@ -1,109 +1,99 @@
-import { users, personalityTypes, chatSessions, messages, type User, type InsertUser, type PersonalityType, type ChatSession, type Message, type InsertChatSession, type InsertMessage } from "@shared/schema";
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { eq, desc } from 'drizzle-orm';
+import { users, chatSessions, messages, type User, type InsertUser, type ChatSession, type Message, type InsertChatSession, type InsertMessage } from "@shared/schema";
+
+// Database connection using existing pg package
+const pool = new Pool({
+  connectionString: process.env.DATABASE_PUBLIC_URL!,
+});
+const db = drizzle(pool);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  getPersonalityTypes(): Promise<PersonalityType[]>;
+  // 👈 REMOVED: getPersonalityTypes - not stored in database
   createChatSession(session: InsertChatSession): Promise<ChatSession>;
   getChatSessions(): Promise<ChatSession[]>;
+  getChatSessionsByUserId(userId: number): Promise<ChatSession[]>;
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesBySessionId(sessionId: number): Promise<Message[]>;
+  getRecentMessages(sessionId: number, limit: number): Promise<Message[]>;
+  updateChatSessionTimestamp(sessionId: number): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private personalityTypes: Map<number, PersonalityType>;
-  private chatSessions: Map<number, ChatSession>;
-  private messages: Map<number, Message>;
-  private currentUserId: number;
-  private currentPersonalityTypeId: number;
-  private currentChatSessionId: number;
-  private currentMessageId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.personalityTypes = new Map();
-    this.chatSessions = new Map();
-    this.messages = new Map();
-    this.currentUserId = 1;
-    this.currentPersonalityTypeId = 1;
-    this.currentChatSessionId = 1;
-    this.currentMessageId = 1;
-
-    // Initialize personality types
-    this.initializePersonalityTypes();
-  }
-
-  private initializePersonalityTypes() {
-    const types = [
-      { name: "Analysts", code: "NT • INTP • ENTP • ENTJ", description: "Think critically and strategically, excelling in complex problem-solving and innovation." },
-      { name: "Diplomats", code: "NF • INFP • ENFP • INFJ", description: "Focus on human potential and meaningful connections, inspiring positive change." },
-      { name: "Sentinels", code: "SJ • ISTJ • ISFJ • ESTJ", description: "Value stability and order, creating reliable systems and maintaining traditions." },
-      { name: "Explorers", code: "SP • ISTP • ISFP • ESTP", description: "Embrace spontaneity and adaptability, thriving in dynamic environments." }
-    ];
-
-    types.forEach(type => {
-      const id = this.currentPersonalityTypeId++;
-      this.personalityTypes.set(id, { id, ...type });
-    });
-  }
+export class DbStorage implements IStorage {
+  // 👈 REMOVED: No personality types initialization needed
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
-  async getPersonalityTypes(): Promise<PersonalityType[]> {
-    return Array.from(this.personalityTypes.values());
-  }
-
   async createChatSession(insertSession: InsertChatSession): Promise<ChatSession> {
-    const id = this.currentChatSessionId++;
-    const session: ChatSession = { 
-      id, 
-      userId: null, 
-      personalityType: insertSession.personalityType || null,
-      createdAt: new Date() 
+    const now = new Date();
+    const sessionData = {
+      ...insertSession,
+      createdAt: now,
+      updatedAt: now
     };
-    this.chatSessions.set(id, session);
+
+    const [session] = await db.insert(chatSessions).values(sessionData).returning();
     return session;
   }
 
   async getChatSessions(): Promise<ChatSession[]> {
-    return Array.from(this.chatSessions.values());
+    return await db.select().from(chatSessions).orderBy(desc(chatSessions.updatedAt));
+  }
+
+  async getChatSessionsByUserId(userId: number): Promise<ChatSession[]> {
+    return await db
+      .select()
+      .from(chatSessions)
+      .where(eq(chatSessions.userId, userId))
+      .orderBy(desc(chatSessions.updatedAt));
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const id = this.currentMessageId++;
-    const message: Message = { 
-      id, 
-      chatSessionId: insertMessage.chatSessionId || null,
-      content: insertMessage.content,
-      isUser: insertMessage.isUser,
-      createdAt: new Date() 
-    };
-    this.messages.set(id, message);
+    const [message] = await db.insert(messages).values(insertMessage).returning();
     return message;
   }
 
   async getMessagesBySessionId(sessionId: number): Promise<Message[]> {
-    return Array.from(this.messages.values()).filter(
-      message => message.chatSessionId === sessionId
-    );
+    return await db
+      .select()
+      .from(messages)
+      .where(eq(messages.chatSessionId, sessionId))
+      .orderBy(messages.createdAt); // Chronological order
+  }
+
+  async getRecentMessages(sessionId: number, limit: number): Promise<Message[]> {
+    return await db
+      .select()
+      .from(messages)
+      .where(eq(messages.chatSessionId, sessionId))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit)
+      .then(results => results.reverse()); // Reverse to get chronological order
+  }
+
+  async updateChatSessionTimestamp(sessionId: number): Promise<void> {
+    await db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() })
+      .where(eq(chatSessions.id, sessionId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DbStorage();
