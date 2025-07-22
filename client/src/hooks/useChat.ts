@@ -1,4 +1,4 @@
-// src/hooks/useChat.ts
+// src/hooks/useChat.ts - FIXED VERSION
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -8,6 +8,7 @@ export const useChat = () => {
     const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
     const [messageInput, setMessageInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
+    const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -43,10 +44,16 @@ export const useChat = () => {
             setCurrentSessionId(session.id);
             setMessages([]); // Clear messages for new session
             queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
+
+            // FIXED: Send pending message after session is created
+            if (pendingMessage) {
+                sendMessageMutation.mutate(pendingMessage);
+                setPendingMessage(null);
+            }
         },
     });
 
-    // Send message mutation - Uses the new backend with conversation context
+    // Send message mutation
     const sendMessageMutation = useMutation({
         mutationFn: async (content: string) => {
             if (!currentSessionId) throw new Error("No active session");
@@ -61,25 +68,29 @@ export const useChat = () => {
         onSuccess: (data) => {
             // Backend returns { userMessage, aiResponse }
             if (data.userMessage && data.aiResponse) {
-                setMessages(prev => [...prev, data.userMessage, data.aiResponse]);
+                // For session-based chats, invalidate queries to refresh sessionMessages
+                if (currentSessionId) {
+                    queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
+                } else {
+                    // For local chats, update local state
+                    setMessages(prev => [...prev, data.userMessage, data.aiResponse]);
+                }
             }
             setMessageInput("");
 
             // Refresh session list to update timestamps
             queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
         },
     });
 
-    // Update messages when session messages change (when switching chats)
-    useEffect(() => {
-        setMessages(sessionMessages);
-    }, [sessionMessages]);
+    // Use sessionMessages directly instead of local state duplication
+    // This eliminates the need for the problematic useEffect
+    const displayMessages = currentSessionId ? sessionMessages : messages;
 
     // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+    }, [displayMessages]);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -89,29 +100,20 @@ export const useChat = () => {
         }
     }, [messageInput]);
 
-    // Handle send message
+    // FIXED: Handle send message without setTimeout
     const handleSendMessage = async (content?: string, personalityType?: string) => {
         const messageContent = content || messageInput.trim();
         if (!messageContent) return;
 
-        // If no active session, create one first
+        // If no active session, create one first and store the message
         if (!currentSessionId) {
-            try {
-                const session = await createSessionMutation.mutateAsync({
-                    personalityType,
-                    title: messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '') // Auto-generate title
-                });
-
-                // Session will be set in the onSuccess callback, then send message
-                setTimeout(() => {
-                    sendMessageMutation.mutate(messageContent);
-                }, 100);
-
-            } catch (error) {
-                console.error('Failed to create session:', error);
-            }
+            setPendingMessage(messageContent);
+            createSessionMutation.mutate({
+                personalityType,
+                title: messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '')
+            });
         } else {
-            // Send to existing session
+            // Send to existing session immediately
             sendMessageMutation.mutate(messageContent);
         }
     };
@@ -120,7 +122,8 @@ export const useChat = () => {
     const handleNewChat = () => {
         setCurrentSessionId(null);
         setMessageInput("");
-        setMessages([]);
+        setMessages([]); // Clear local messages for new chat
+        setPendingMessage(null); // Clear any pending message
     };
 
     // Handle chat selection (switch to existing chat)
@@ -129,12 +132,8 @@ export const useChat = () => {
 
         setCurrentSessionId(chatId);
         setMessageInput("");
-        // Messages will be loaded by the useQuery effect
-    };
-
-    // Generate chat title from first message
-    const generateChatTitle = (firstMessage: string): string => {
-        return firstMessage.slice(0, 50) + (firstMessage.length > 50 ? '...' : '');
+        setPendingMessage(null); // Clear any pending message
+        // sessionMessages will be loaded automatically by the useQuery
     };
 
     const isLoading = sendMessageMutation.isPending || createSessionMutation.isPending;
@@ -143,7 +142,7 @@ export const useChat = () => {
         // State
         currentSessionId,
         messageInput,
-        messages,
+        messages: displayMessages, // Use the computed displayMessages
 
         // Refs
         textareaRef,

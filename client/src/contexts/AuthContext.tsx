@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// client/src/contexts/AuthContext.tsx - FIXED VERSION
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 interface User {
     id: number;
@@ -48,15 +49,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         checkAuthStatus();
     }, []);
 
-    const login = (userData: User) => {
+    // FIXED: Use useCallback to ensure stable function reference
+    const login = useCallback((userData: User) => {
         setUser(userData);
-    };
+    }, []);
 
-    const logout = () => {
+    // FIXED: Use useCallback to ensure stable function reference
+    const logout = useCallback(() => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
-    };
+    }, []);
 
     return (
         <AuthContext.Provider value={{ user, isLoading, login, logout }}>

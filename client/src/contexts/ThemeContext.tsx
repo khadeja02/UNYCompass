@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from "react";
+// client/src/contexts/ThemeContext.tsx - FIXED VERSION
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 type Theme = "light" | "dark";
 
@@ -25,9 +26,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const toggleTheme = () => {
+  // FIXED: Use useCallback to ensure stable function reference
+  const toggleTheme = useCallback(() => {
     setTheme(prev => prev === "light" ? "dark" : "light");
-  };
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
