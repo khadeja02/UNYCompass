@@ -1,6 +1,15 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { config } from 'dotenv'; // 👈 ADD THIS
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+
+// 👈 ADD THIS - Load environment variables FIRST
+config();
+
+// 👈 ADD THIS - Verify critical env vars are loaded
+console.log('🔧 Environment check:');
+console.log('  JWT_SECRET exists:', !!process.env.JWT_SECRET);
+console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 
 const app = express();
 app.use(express.json());
@@ -59,10 +68,10 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-const port = 5000;
-const host = "127.0.0.1";
+  const port = 5000;
+  const host = "127.0.0.1";
 
-server.listen(port, host, () => {
-  console.log(`✅ Server is running at http://${host}:${port}`);
-});
+  server.listen(port, host, () => {
+    console.log(`✅ Server is running at http://${host}:${port}`);
+  });
 })();
