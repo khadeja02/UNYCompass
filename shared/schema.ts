@@ -1,38 +1,31 @@
 import { table } from "console";
 import { IsPrimaryKey, NotNull } from "drizzle-orm";
-import { pgTable, text, serial, integer, boolean, timestamp, PgSerialBuilderInitial, PgTextBuilder } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, PgSerialBuilderInitial, PgTextBuilder } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// ("users", {
-//   id: serial("id").primaryKey(),
-//   username: text("username").notNull().unique(),
-//   password: text("password").notNull(),
-// });
-
+// 👈 FIXED: Match your EXACT existing users table structure
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  username: varchar("username", { length: 50 }).notNull().unique(),
+  email: varchar("email", { length: 100 }).notNull().unique(),
+  password_hash: varchar("password_hash", { length: 255 }).notNull(),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
 });
 
-export const personalityTypes = pgTable("personality_types", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  code: text("code").notNull(),
-  description: text("description").notNull(),
-});
-
+// 👈 NEW: Chat tables (these will be created)
 export const chatSessions = pgTable("chat_sessions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id"),
-  personalityType: text("personality_type"),
+  userId: integer("user_id").notNull(),
+  title: text("title"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
-  chatSessionId: integer("chat_session_id"),
+  chatSessionId: integer("chat_session_id").notNull(),
   content: text("content").notNull(),
   isUser: boolean("is_user").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -40,11 +33,13 @@ export const messages = pgTable("messages", {
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
-  password: true,
+  email: true,
+  password_hash: true,
 });
 
 export const insertChatSessionSchema = createInsertSchema(chatSessions).pick({
-  personalityType: true,
+  userId: true,
+  title: true,
 });
 
 export const insertMessageSchema = createInsertSchema(messages).pick({
@@ -72,7 +67,6 @@ export interface ChatbotResponse {
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-export type PersonalityType = typeof personalityTypes.$inferSelect;
 export type ChatSession = typeof chatSessions.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type InsertChatSession = z.infer<typeof insertChatSessionSchema>;

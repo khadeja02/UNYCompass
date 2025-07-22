@@ -1,4 +1,5 @@
-// client/src/components/ui/ChatHeader.tsx
+// client/src/components/ui/ChatHeader.tsx - FIXED VERSION
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +16,7 @@ interface ChatHeaderProps {
     logout: () => void;
 }
 
-export function ChatHeader({ theme, toggleTheme, user, logout }: ChatHeaderProps) {
+const ChatHeader = memo(function ChatHeader({ theme, toggleTheme, user, logout }: ChatHeaderProps) {
     return (
         <div className="bg-background shadow-sm px-6 py-4 flex justify-between items-center border-b border-border">
             <div className="flex items-center gap-2">
@@ -64,4 +65,6 @@ export function ChatHeader({ theme, toggleTheme, user, logout }: ChatHeaderProps
             </DropdownMenu>
         </div>
     );
-}
+});
+
+export { ChatHeader };
