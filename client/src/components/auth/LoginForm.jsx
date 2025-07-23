@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const LoginForm = ({ onLogin, switchToRegister }) => {
     const [formData, setFormData] = useState({
-        username: '',
+        email: '',
         password: ''
     });
     const [error, setError] = useState('');
@@ -20,99 +20,151 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
         setError('');
         setIsLoading(true);
 
-        console.log('=== LOGIN DEBUG START ===');
-        console.log('Form data:', formData);
-
         try {
-            console.log('Making fetch request to /api/auth/login...');
-
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData),
             });
 
-            console.log('Response received:', response);
-            console.log('Response status:', response.status);
-            console.log('Response ok:', response.ok);
-
             const data = await response.json();
-            console.log('Response data:', data);
-
             if (response.ok) {
-                console.log('Login successful, storing token...');
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
-                console.log('Token stored, calling onLogin...');
                 onLogin(data.user);
             } else {
-                console.log('Login failed with error:', data.error);
                 setError(data.error || 'Login failed');
             }
         } catch (err) {
-            console.log('=== CATCH BLOCK TRIGGERED ===');
-            console.log('Error type:', typeof err);
-            console.log('Error message:', err.message);
-            console.log('Full error:', err);
-            console.log('Error stack:', err.stack);
             setError('Network error. Please try again.');
         } finally {
-            console.log('=== LOGIN DEBUG END ===');
             setIsLoading(false);
         }
     };
 
     return (
         <div>
-            <h2 className="text-2xl font-bold text-center mb-6">Login</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium mb-1">Username or Email:</label>
+            <form onSubmit={handleSubmit} style={{ marginBottom: '1.5rem' }}>
+                <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                    <label style={{
+                        display: 'block',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        color: '#4871ff',
+                        marginBottom: '8px'
+                    }}>Email Address</label>
                     <input
-                        type="text"
-                        name="username"
-                        value={formData.username}
+                        type="email"
+                        name="email"
+                        value={formData.email}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{
+                            width: '100%',
+                            padding: '16px',
+                            fontSize: '1rem',
+                            background: 'rgba(167, 100, 255, 0.1)',
+                            border: '2px solid rgba(6, 2, 8, 0.2)',
+                            borderRadius: '12px',
+                            color: 'black'
+                        }}
+                        placeholder="Enter your email"
                         required
                     />
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium mb-1">Password:</label>
+                <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                    <label style={{
+                        display: 'block',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        color: '#4871ff',
+                        marginBottom: '8px'
+                    }}>Password</label>
                     <input
                         type="password"
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{
+                            width: '100%',
+                            padding: '16px',
+                            fontSize: '1rem',
+                            background: 'rgba(167, 100, 255, 0.1)',
+                            border: '2px solid rgba(0, 0, 0, 0.2)',
+                            borderRadius: '12px',
+                            color: 'black'
+                        }}
+                        placeholder="Enter your password"
                         required
                     />
+                    <div style={{ textAlign: 'right', marginTop: '4px' }}>
+                        <button
+                            type="button"
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#4871ff',
+                                fontSize: '0.875rem',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Forget password? Click here
+                        </button>
+                    </div>
                 </div>
 
-                {error && <div className="text-red-600 text-sm">{error}</div>}
+                {error && (
+                    <div style={{
+                        color: '#fecaca',
+                        background: 'rgba(220, 38, 38, 0.2)',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        marginBottom: '16px',
+                        textAlign: 'left'
+                    }}>
+                        {error}
+                    </div>
+                )}
 
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    style={{
+                        width: '100%',
+                        padding: '16px',
+                        background: 'linear-gradient(to right, #8b5cf6, #7c3aed)',
+                        color: 'white',
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        border: 'none',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 6px rgba(40, 1, 82, 0.3)'
+                    }}
                 >
-                    {isLoading ? 'Logging in...' : 'Login'}
+                    {isLoading ? 'Logging in...' : 'LOGIN'}
                 </button>
             </form>
 
-            <p className="text-center mt-4 text-sm">
-                Don't have an account?{' '}
-                <button
-                    type="button"
-                    onClick={switchToRegister}
-                    className="text-blue-600 hover:underline"
-                >
-                    Register here
-                </button>
-            </p>
+            <div style={{ marginTop: '24px', fontSize: '0.875rem', color: '#4871ff' }}>
+                <p>
+                    Don't have an account?{' '}
+                    <button
+                        type="button"
+                        onClick={switchToRegister}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#4871ff',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Sign up
+                    </button>
+                </p>
+            </div>
         </div>
     );
 };
