@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 const LoginForm = ({ onLogin, switchToRegister }) => {
     const [formData, setFormData] = useState({
-        email: '',
+        username: '',
         password: ''
     });
     const [error, setError] = useState('');
@@ -20,24 +20,46 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
         setError('');
         setIsLoading(true);
 
+        console.log('=== LOGIN DEBUG START ===');
+        console.log('Form data:', formData);
+
         try {
+            console.log('Making fetch request to /api/auth/login...');
+
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify(formData),
             });
 
+            console.log('Response received:', response);
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+
             const data = await response.json();
+            console.log('Response data:', data);
+
             if (response.ok) {
+                console.log('Login successful, storing token...');
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
+                console.log('Token stored, calling onLogin...');
                 onLogin(data.user);
             } else {
+                console.log('Login failed with error:', data.error);
                 setError(data.error || 'Login failed');
             }
         } catch (err) {
+            console.log('=== CATCH BLOCK TRIGGERED ===');
+            console.log('Error type:', typeof err);
+            console.log('Error message:', err.message);
+            console.log('Full error:', err);
+            console.log('Error stack:', err.stack);
             setError('Network error. Please try again.');
         } finally {
+            console.log('=== LOGIN DEBUG END ===');
             setIsLoading(false);
         }
     };
@@ -52,11 +74,11 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
                         fontWeight: '500',
                         color: '#4871ff',
                         marginBottom: '8px'
-                    }}>Email Address</label>
+                    }}>Username or Email</label>
                     <input
-                        type="email"
-                        name="email"
-                        value={formData.email}
+                        type="text"
+                        name="username"
+                        value={formData.username}
                         onChange={handleChange}
                         style={{
                             width: '100%',
@@ -67,7 +89,7 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
                             borderRadius: '12px',
                             color: 'black'
                         }}
-                        placeholder="Enter your email"
+                        placeholder="Enter your username or email"
                         required
                     />
                 </div>
@@ -115,8 +137,9 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
 
                 {error && (
                     <div style={{
-                        color: '#fecaca',
-                        background: 'rgba(220, 38, 38, 0.2)',
+                        color: '#dc2626',
+                        background: 'rgba(248, 113, 113, 0.1)',
+                        border: '1px solid rgba(220, 38, 38, 0.3)',
                         padding: '12px',
                         borderRadius: '8px',
                         fontSize: '0.875rem',

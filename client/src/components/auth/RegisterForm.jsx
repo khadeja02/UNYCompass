@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 
 const RegisterForm = ({ onRegister, switchToLogin }) => {
     const [formData, setFormData] = useState({
-        fullName: '',
+        username: '',
         email: '',
         password: '',
         confirmPassword: ''
     });
-    const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -22,11 +21,6 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
         e.preventDefault();
         setError('');
 
-        if (!agreedToTerms) {
-            setError('You must agree to the Terms of Service');
-            return;
-        }
-
         if (formData.password !== formData.confirmPassword) {
             setError('Passwords do not match');
             return;
@@ -39,28 +33,50 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
 
         setIsLoading(true);
 
+        console.log('=== REGISTER DEBUG START ===');
+        console.log('Form data:', formData);
+
         try {
+            console.log('Making fetch request to /api/auth/register...');
+
             const response = await fetch('/api/auth/register', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
-                    fullName: formData.fullName,
+                    username: formData.username,
                     email: formData.email,
                     password: formData.password
                 }),
             });
 
+            console.log('Response received:', response);
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+
             const data = await response.json();
+            console.log('Response data:', data);
+
             if (response.ok) {
+                console.log('Registration successful, storing token...');
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
+                console.log('Token stored, calling onRegister...');
                 onRegister(data.user);
             } else {
+                console.log('Registration failed with error:', data.error);
                 setError(data.error || 'Registration failed');
             }
         } catch (err) {
+            console.log('=== REGISTER CATCH BLOCK TRIGGERED ===');
+            console.log('Error type:', typeof err);
+            console.log('Error message:', err.message);
+            console.log('Full error:', err);
+            console.log('Error stack:', err.stack);
             setError('Network error. Please try again.');
         } finally {
+            console.log('=== REGISTER DEBUG END ===');
             setIsLoading(false);
         }
     };
@@ -75,11 +91,11 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                         fontWeight: '500',
                         color: '#4871ff',
                         marginBottom: '8px'
-                    }}>Full Name</label>
+                    }}>Username</label>
                     <input
                         type="text"
-                        name="fullName"
-                        value={formData.fullName}
+                        name="username"
+                        value={formData.username}
                         onChange={handleChange}
                         style={{
                             width: '100%',
@@ -90,7 +106,7 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                             borderRadius: '12px',
                             color: 'black'
                         }}
-                        placeholder="Enter your full name"
+                        placeholder="Enter your username"
                         required
                     />
                 </div>
@@ -174,26 +190,6 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                         placeholder="Confirm your password"
                         required
                     />
-                </div>
-
-                <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'flex-start' }}>
-                    <input
-                        type="checkbox"
-                        id="terms"
-                        checked={agreedToTerms}
-                        onChange={(e) => setAgreedToTerms(e.target.checked)}
-                        style={{
-                            marginRight: '10px',
-                            marginTop: '3px'
-                        }}
-                    />
-                    <label htmlFor="terms" style={{
-                        fontSize: '0.875rem',
-                        color: '#4871ff',
-                        textAlign: 'left'
-                    }}>
-                        I agree to the <a href="#" style={{ color: '#4871ff', fontWeight: '600' }}>Terms of Service</a>
-                    </label>
                 </div>
 
                 {error && (
