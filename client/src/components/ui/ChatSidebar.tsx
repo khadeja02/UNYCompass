@@ -41,14 +41,8 @@ export function ChatSidebar({ onNewChat, onChatSelect, currentSessionId, chatbot
     const IconComponent = badgeData.icon;
 
     const formatChatTitle = (session: ChatSession) => {
-        // Use title if available, otherwise generate from personality type
-        if (session.title) {
-            return session.title;
-        }
-        if (session.personalityType) {
-            return `${session.personalityType} Chat`;
-        }
-        return "New Chat";
+        // Use title if available, otherwise default to "New Chat"
+        return session.title || "New Chat";
     };
 
     const formatChatDate = (date: Date | string | null) => {
@@ -115,12 +109,6 @@ export function ChatSidebar({ onNewChat, onChatSelect, currentSessionId, chatbot
                                     <Clock className="w-3 h-3 mr-1" />
                                     {formatChatDate(session.updatedAt)}
                                 </div>
-
-                                {session.personalityType && (
-                                    <div className="text-xs text-purple-200 mt-1">
-                                        {session.personalityType}
-                                    </div>
-                                )}
                             </button>
                         ))}
                     </div>
