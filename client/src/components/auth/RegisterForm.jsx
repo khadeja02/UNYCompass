@@ -342,16 +342,17 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                             color: '#333',
                             lineHeight: '1.6'
                         }}>
-                            <p>Advisory Nature of Recommendations
- The academic program and major suggestions provided by this chatbot are recommendations only and are not guaranteed to be accurate or suitable for your individual circumstances. Final decisions remain your own responsibility.
-Fairness and Continuous Improvement
- We strive to minimize bias in our system. Recommendations are generated from data tested with diverse student populations. Our team regularly reviews and audits the database and machine learning models to reduce unfairness or skewed outcomes.
-Privacy and Data Protection
- We follow applicable student privacy standards, including FERPA guidelines. Personal information is anonymized wherever possible, and your data is stored securely with a clear retention policy. Your data will not be shared with unauthorized third parties.
- Transparency
- You have the right to understand how recommendations are generated. This chatbot uses your provided data (such as personality traits or preferences) to match you with potential majors using transparent, explainable algorithms.
-Consent to Use Data
- By proceeding, you consent to the collection and processing of your data for the purpose of generating academic suggestions. You may request deletion of your data at any time by contacting our support team.
+                            <h2>Advisory Nature of Recommendations:</h2><p>
+ <p>The academic program and major suggestions provided by this chatbot are recommendations only and are not guaranteed to be accurate or suitable for your individual circumstances. Final decisions remain your own responsibility.</p>
+<h2>Fairness and Continuous Improvement:</h2>
+<p>
+ We strive to minimize bias in our system. Recommendations are generated from data tested with diverse student populations. Our team regularly reviews and audits the database and machine learning models to reduce unfairness or skewed outcomes. </p>
+<h2>Privacy and Data Protection:</h2>
+ <p>We follow applicable student privacy standards, including FERPA guidelines. Personal information is anonymized wherever possible, and your data is stored securely with a clear retention policy. Your data will not be shared with unauthorized third parties.</p>
+ <h2>Transparency:</h2>
+ <p>You have the right to understand how recommendations are generated. This chatbot uses your provided data (such as personality traits or preferences) to match you with potential majors using transparent, explainable algorithms.</p>
+<h2>Consent to Use Data:</h2>
+ <p>By proceeding, you consent to the collection and processing of your data for the purpose of generating academic suggestions. You may request deletion of your data at any time by contacting our support team.</p>
 </p>
                             {/* Terms and conditions content*/}
                         </div>
