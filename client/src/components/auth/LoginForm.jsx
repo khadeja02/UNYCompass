@@ -8,6 +8,10 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    //added state for terms agreement
+    const [agreeToTerms, setAgreeToTerms] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
+
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -18,6 +22,13 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        //check if terms are agreed to before proceeding
+        if (!agreeToTerms) {
+            setError('Please agree to the terms and conditions to continue');
+            return;
+        }
+
         setIsLoading(true);
 
         console.log('=== LOGIN DEBUG START ===');
@@ -134,6 +145,42 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
                         </button>
                     </div>
                 </div>
+
+                {/* Terms and Conditions Checkbox */}
+                <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                    <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        fontSize: '0.875rem', 
+                        color: '#4871ff',
+                        cursor: 'pointer'
+                    }}>
+                        <input
+                            type="checkbox"
+                            checked={agreeToTerms}
+                            onChange={(e) => setAgreeToTerms(e.target.checked)}
+                            style={{ 
+                                marginRight: '8px',
+                                width: '16px',
+                                height: '16px',
+                                cursor: 'pointer'
+                            }}
+                        />
+                        I agree with the{' '}
+                        <span
+                            onClick={() => setShowTermsModal(true)}
+                            style={{
+                                color: '#7c3aed',
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                                marginLeft: '4px'
+                            }}
+                        >
+                            terms and conditions
+                        </span>
+                    </label>
+                </div>
+
 
                 {error && (
                     <div style={{
