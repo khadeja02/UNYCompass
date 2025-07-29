@@ -5,11 +5,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 
+# Add the chatbot directory to Python path
 chatbot_dir = Path(__file__).parent.parent / "chatbot"
 sys.path.append(str(chatbot_dir))
 
 try:
-    from chatbot.hunter_ai import get_database, UNYCompassBot
+    # Import directly from hunter_ai module (not chatbot.hunter_ai)
+    from hunter_ai import UNYCompassDatabase, UNYCompassBot
 except ImportError as e:
     print(json.dumps({"error": f"Failed to import hunter_ai: {e}"}))
     sys.exit(1)
@@ -20,10 +22,10 @@ CORS(app)
 def initialize_chatbot():
     """Initialize the chatbot and database"""
     try:
-        db = get_database()
-        if not db or not db.chunks:
-            return None, "Database not found or empty. Please run the web crawler first."
+        # Initialize the database
+        db = UNYCompassDatabase()
         
+        # Create the bot
         bot = UNYCompassBot(db)
         return bot, None
     except Exception as e:
@@ -77,4 +79,5 @@ def status():
     return jsonify({"status": "ready"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Change to port 5001 to avoid conflict with your main Express server
+    app.run(host='0.0.0.0', port=5001, debug=True)

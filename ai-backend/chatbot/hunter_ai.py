@@ -9,9 +9,10 @@ import hashlib
 import time
 from pathlib import Path
 
-# Load environment variables
-load_dotenv(dotenv_path=Path("../api/hunter_api-key.env"))
-load_dotenv(dotenv_path=Path("../api/pinecone_api-key.env"))
+# Load environment variables - fix the paths
+current_dir = Path(__file__).parent
+load_dotenv(dotenv_path=current_dir / "../api/hunter_api-key.env")
+load_dotenv(dotenv_path=current_dir / "../api/pinecone_api-key.env")
 
 class UNYCompassDatabase:
     def __init__(self, index_name="uny-compass-index"):
@@ -41,16 +42,29 @@ class UNYCompassDatabase:
         # Check if we need to upload data
         stats = self.index.describe_index_stats()
         if stats.total_vector_count == 0:
-            self.upload_text_file("hunter_content.txt")
+            # Look for hunter_content.txt in the docs directory
+            content_file = current_dir / "../docs/hunter_content.txt"
+            if content_file.exists():
+                self.upload_text_file(str(content_file))
+            else:
+                print(f"Warning: {content_file} not found. Please run the web crawler first.")
 
     def upload_text_file(self, file_path):
         """Upload text file to Pinecone"""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            text = f.read()
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except FileNotFoundError:
+            print(f"Error: File {file_path} not found")
+            return
         
         # Simple chunking
         chunk_size = 500
         chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size) if text[i:i+chunk_size].strip()]
+        
+        if not chunks:
+            print("No content to upload")
+            return
         
         # Create vectors and upload
         vectors = []
@@ -64,12 +78,12 @@ class UNYCompassDatabase:
             
             # Upload in batches of 100
             if len(vectors) == 100:
-                self.index.upsert(vectors=vectors)  # Upload to default namespace
+                self.index.upsert(vectors=vectors)
                 vectors = []
         
         # Upload remaining
         if vectors:
-            self.index.upsert(vectors=vectors)  # Upload to default namespace
+            self.index.upsert(vectors=vectors)
         
         print(f"Upload complete: {len(chunks)} chunks")
 
@@ -80,7 +94,6 @@ class UNYCompassDatabase:
             vector=query_vector.tolist(),
             top_k=top_k,
             include_metadata=True
-            # No namespace specified = search default namespace
         )
         
         return [match['metadata']['text'] for match in results['matches'] if match['score'] > 0.2]
@@ -130,6 +143,11 @@ Answer:"""
         response = self.llm.invoke(prompt)
         return response.content
 
+# Helper function for backwards compatibility
+def get_database():
+    """Create and return a UNYCompassDatabase instance"""
+    return UNYCompassDatabase()
+
 def main():
     # Initialize
     db = UNYCompassDatabase()
@@ -138,7 +156,6 @@ def main():
     print("Hunter College Advisor Ready!")
     
     while True:
-
         try:
             user_input = input("User: ").strip()
             
@@ -150,8 +167,6 @@ def main():
                 print("UNY Compass Chatbot:", bot.answer_question(user_input))
         except KeyboardInterrupt:
             break
-
-        
 
 if __name__ == "__main__":
     main()
