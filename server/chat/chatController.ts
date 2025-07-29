@@ -68,7 +68,7 @@ export class ChatController {
 
                     console.log('Sending to AI with context:', fullPrompt);
 
-                    const chatbotResponse = await ChatbotService.callPythonChatbot(fullPrompt);
+                    const chatbotResponse = await ChatbotService.callFlaskChatbot(fullPrompt);
 
                     if ((chatbotResponse as any).success) {
                         aiResponseContent = (chatbotResponse as any).answer;
