@@ -1,24 +1,21 @@
-// client/src/pages/chat.tsx - Fixed to use chatbot
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { PersonalityGroup } from '@/lib/personalityData';
 import type { Message } from '@shared/schema';
 
-// Import components
 import { ChatSidebar } from "@/components/ui/ChatSidebar";
 import { ChatHeader } from "@/components/ui/ChatHeader";
 import { ChatInput } from "@/components/ui/ChatInput";
 import { PersonalitySelector } from "@/components/ui/PersonalitySelector";
 
-// Import the chatbot hook instead of chat hook
 import { useChatbot } from '@/hooks/useChatbot';
+import { useChat } from '@/hooks/useChat';
 
 export default function ChatPage() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
 
-  // Use the chatbot hook
   const {
     chatbotStatus,
     sendChatbotMessage,
@@ -30,88 +27,101 @@ export default function ChatPage() {
     resetChatbotState
   } = useChatbot();
 
-  // Local state for chat interface
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [messageInput, setMessageInput] = useState('');
-  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const {
+    currentSessionId,
+    messageInput,
+    messages: savedMessages,
+    textareaRef,
+    messagesEndRef,
+    setMessageInput,
+    chatSessions,
+    handleSendMessage,
+    handleNewChat: chatHandleNewChat,
+    handleChatSelect: chatHandleSelect,
+    isLoading: chatIsLoading
+  } = useChat();
+
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [selectedPersonalityGroup, setSelectedPersonalityGroup] = useState<PersonalityGroup | null>(null);
-  const [isUsingChatbot, setIsUsingChatbot] = useState(true); // Default to chatbot mode
-  const [pendingMessage, setPendingMessage] = useState('');
-  const [selectedPersonalityType, setSelectedPersonalityType] = useState('chatbot');
+  const [isUsingChatbot, setIsUsingChatbot] = useState(true);
 
-  // Refs
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const displayMessages = currentSessionId ? savedMessages : localMessages;
+  const isLoading = currentSessionId ? chatIsLoading : isChatbotLoading;
 
-  // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [displayMessages]);
 
-  // Initialize chatbot mode on load
   useEffect(() => {
-    handleUseChatbot(
-      setMessages,
-      setCurrentSessionId,
-      setPendingMessage,
-      setSelectedPersonalityType,
-      setIsUsingChatbot
-    );
-  }, []);
+    if (!currentSessionId) {
+      handleUseChatbot(
+        setLocalMessages,
+        () => { },
+        () => { },
+        () => { },
+        setIsUsingChatbot
+      );
+    }
+  }, [currentSessionId]);
 
-  // Handle personality selection (creates new chat with personality context)
   const handlePersonalitySelect = (personalityCode: string) => {
     const prompt = `I am a ${personalityCode} personality type. Based on my personality, what Hunter College majors would you recommend for me and why?`;
-    sendChatbotMessage(prompt, setMessages);
-    setSelectedPersonalityGroup(null); // Hide selector after selection
+    currentSessionId
+      ? handleSendMessage(prompt, personalityCode)
+      : sendChatbotMessage(prompt, setLocalMessages);
+    setSelectedPersonalityGroup(null);
   };
 
-  // Handle unknown personality
   const handleUnknownPersonality = () => {
     const prompt = "I don't know my personality type. Can you help me find a Hunter College major that might be right for me? What questions should I consider?";
-    sendChatbotMessage(prompt, setMessages);
-    setSelectedPersonalityGroup(null); // Hide selector after selection
-  };
-
-  // Handle suggestion clicks
-  const handleSuggestionClickLocal = (suggestion: string) => {
-    setMessageInput(suggestion);
-    sendChatbotMessage(suggestion, setMessages);
-  };
-
-  // Handle input send
-  const handleInputSend = (content: string) => {
-    sendChatbotMessage(content, setMessages);
-    setMessageInput("");
-  };
-
-  // Handle new chat
-  const handleNewChat = () => {
-    setMessages([]);
-    setCurrentSessionId(null);
+    currentSessionId
+      ? handleSendMessage(prompt)
+      : sendChatbotMessage(prompt, setLocalMessages);
     setSelectedPersonalityGroup(null);
-    setMessageInput('');
-    resetChatbotState();
+  };
 
-    // Re-initialize chatbot mode
+  const handleSuggestionClickLocal = (suggestion: string) => {
+    if (currentSessionId) {
+      setMessageInput(suggestion);
+      handleSendMessage(suggestion);
+    } else {
+      sendChatbotMessage(suggestion, setLocalMessages);
+    }
+  };
+
+  const handleInputSend = (content: string) => {
+    currentSessionId
+      ? handleSendMessage(content)
+      : sendChatbotMessage(content, setLocalMessages);
+    if (!currentSessionId) setMessageInput("");
+  };
+
+  const handleNewChat = () => {
+    chatHandleNewChat();
+    setLocalMessages([]);
+    setSelectedPersonalityGroup(null);
+    resetChatbotState();
+    setIsUsingChatbot(true);
     handleUseChatbot(
-      setMessages,
-      setCurrentSessionId,
-      setPendingMessage,
-      setSelectedPersonalityType,
+      setLocalMessages,
+      () => { },
+      () => { },
+      () => { },
       setIsUsingChatbot
     );
   };
 
-  // Handle chat selection (for now, just reset to new chat since we're in chatbot mode)
   const handleChatSelect = (chatId: number) => {
-    // For now, just start a new chat since we're focused on chatbot functionality
-    handleNewChat();
+    chatHandleSelect(chatId);
+    setIsUsingChatbot(false);
+    setSelectedPersonalityGroup(null);
+    resetChatbotState();
   };
+
+  const showWelcomeScreen = !currentSessionId && displayMessages.length === 0 && showChatbotSuggestions;
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar with chat history */}
       <ChatSidebar
         onNewChat={handleNewChat}
         onChatSelect={handleChatSelect}
@@ -119,9 +129,7 @@ export default function ChatPage() {
         chatbotStatus={chatbotStatus}
       />
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <ChatHeader
           theme={theme}
           toggleTheme={toggleTheme}
@@ -129,10 +137,8 @@ export default function ChatPage() {
           logout={logout}
         />
 
-        {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-h-0">
-          {messages.length === 0 && showChatbotSuggestions ? (
-            // Welcome screen with personality selection (only when no messages)
+          {showWelcomeScreen ? (
             <PersonalitySelector
               selectedPersonalityGroup={selectedPersonalityGroup}
               setSelectedPersonalityGroup={setSelectedPersonalityGroup}
@@ -142,10 +148,9 @@ export default function ChatPage() {
               chatbotStatus={chatbotStatus}
             />
           ) : (
-            // Chat interface (for active chats)
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 p-6 overflow-y-auto min-h-0">
-                {messages.map((message) => (
+                {displayMessages.map((message) => (
                   <div key={message.id} className={`mb-4 ${message.isUser ? "text-right" : "text-left"}`}>
                     <div className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.isUser
                       ? "bg-purple-600 text-white"
@@ -156,7 +161,7 @@ export default function ChatPage() {
                   </div>
                 ))}
 
-                {isChatbotLoading && (
+                {isLoading && (
                   <div className="text-left mb-4">
                     <div className="inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700">
                       <div className="flex items-center gap-2">
@@ -173,12 +178,11 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Message Input - Always visible */}
         <ChatInput
-          messageInput={messageInput}
-          setMessageInput={setMessageInput}
+          messageInput={currentSessionId ? messageInput : ""}
+          setMessageInput={currentSessionId ? setMessageInput : () => { }}
           onSendMessage={handleInputSend}
-          isLoading={isChatbotLoading}
+          isLoading={isLoading}
           chatbotStatus={chatbotStatus}
         />
       </div>
