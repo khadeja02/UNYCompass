@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { PersonalityGroup } from '@/lib/personalityData';
-import type { Message } from '@shared/schema';
 
 import { ChatSidebar } from "@/components/ui/ChatSidebar";
 import { ChatHeader } from "@/components/ui/ChatHeader";
@@ -34,6 +33,10 @@ export default function ChatPage() {
     handleSendMessage,
     handleNewChat: chatHandleNewChat,
     handleChatSelect: chatHandleSelect,
+    handleLoadMoreSessions,
+    hasMoreSessions,
+    isLoadingMoreSessions,
+    isLoadingSessions,
     isLoading: chatIsLoading
   } = useChat();
 
@@ -67,7 +70,6 @@ export default function ChatPage() {
   };
 
   const handleSuggestionClickLocal = (suggestion: string) => {
-    setMessageInput(suggestion);
     handleSendMessage(suggestion);
     setShowChatbotSuggestions(false);
   };
@@ -102,6 +104,11 @@ export default function ChatPage() {
         onChatSelect={handleChatSelect}
         currentSessionId={currentSessionId}
         chatbotStatus={chatbotStatus}
+        chatSessions={chatSessions}
+        onLoadMoreSessions={handleLoadMoreSessions}
+        hasMoreSessions={hasMoreSessions}
+        isLoadingMoreSessions={isLoadingMoreSessions}
+        isLoadingSessions={isLoadingSessions}
       />
 
       <div className="flex-1 flex flex-col">

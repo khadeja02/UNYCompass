@@ -45,8 +45,22 @@ export class ChatController {
 
     getChatSessions = async (req: any, res: Response) => {
         try {
-            const sessions = await ChatService.getChatSessionsByUserId(req.user.userId);
-            res.json(sessions);
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 10;
+            const offset = (page - 1) * limit;
+
+            const totalSessions = await ChatService.getTotalSessionsByUserId(req.user.userId);
+            const sessions = await ChatService.getChatSessionsByUserId(req.user.userId, limit, offset);
+
+            res.json({
+                sessions,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(totalSessions / limit),
+                    totalSessions,
+                    hasMore: page * limit < totalSessions
+                }
+            });
         } catch (error) {
             res.status(500).json({ message: "Failed to fetch chat sessions" });
         }

@@ -1,6 +1,5 @@
-// src/hooks/useChat.ts
 import { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type { ChatSession, Message } from '@shared/schema';
 
@@ -14,22 +13,54 @@ export const useChat = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const queryClient = useQueryClient();
 
-    const { data: chatSessions = [] } = useQuery<ChatSession[]>({
+    const {
+        data: chatSessionsData,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isLoading: isLoadingSessions
+    } = useInfiniteQuery({
         queryKey: ["/api/chat-sessions"],
-        queryFn: async () => {
-            const response = await apiRequest("GET", "/api/chat-sessions");
+        queryFn: async ({ pageParam = 1 }) => {
+            const response = await apiRequest("GET", `/api/chat-sessions?page=${pageParam}&limit=10`);
             const data = await response.json();
-            return data;
+
+            if (Array.isArray(data)) {
+                return {
+                    sessions: data,
+                    pagination: {
+                        currentPage: pageParam,
+                        hasMore: false,
+                        totalPages: 1,
+                        totalSessions: data.length
+                    }
+                };
+            } else {
+                return data;
+            }
         },
+        getNextPageParam: (lastPage) => {
+            if (!lastPage.pagination) {
+                return undefined;
+            }
+
+            const hasMore = lastPage.pagination.hasMore;
+            const nextPage = hasMore ? lastPage.pagination.currentPage + 1 : undefined;
+            return nextPage;
+        },
+        initialPageParam: 1,
     });
+
+    const chatSessions = chatSessionsData?.pages.flatMap((page) => {
+        return page.sessions || page;
+    }) ?? [];
 
     const { data: sessionMessages = [] } = useQuery<Message[]>({
         queryKey: ["/api/messages", currentSessionId],
         queryFn: async () => {
             if (!currentSessionId) return [];
             const response = await apiRequest("GET", `/api/messages/${currentSessionId}`);
-            const data = await response.json();
-            return data;
+            return response.json();
         },
         enabled: !!currentSessionId,
     });
@@ -52,12 +83,10 @@ export const useChat = () => {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('Session creation failed:', response.status, errorText);
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
 
-            const result = await response.json();
-            return result;
+            return response.json();
         },
         onSuccess: (session: ChatSession) => {
             setCurrentSessionId(session.id);
@@ -72,7 +101,6 @@ export const useChat = () => {
             }
         },
         onError: (error) => {
-            console.error('Session creation failed:', error);
             alert(`Session creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             setPendingMessage(null);
         }
@@ -84,10 +112,11 @@ export const useChat = () => {
                 throw new Error("No active session");
             }
 
+            // Add optimistic user message immediately
             const tempUserMessage: Message = {
-                id: Date.now(),
+                id: -Date.now(), // Use negative number for temp messages
                 chatSessionId: currentSessionId,
-                content,
+                content: content,
                 isUser: true,
                 createdAt: new Date()
             };
@@ -104,6 +133,7 @@ export const useChat = () => {
             });
 
             if (!response.ok) {
+                // Remove temp message on error
                 queryClient.setQueryData(
                     ["/api/messages", currentSessionId],
                     (oldMessages: Message[] = []) => oldMessages.filter(msg => msg.id !== tempUserMessage.id)
@@ -113,19 +143,18 @@ export const useChat = () => {
                 throw new Error(errorData.message || 'Failed to send message');
             }
 
-            const data = await response.json();
-            return data;
+            return response.json();
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
+            // The server returns both userMessage and aiResponse
+            // Replace the entire messages cache with fresh data from server
             if (currentSessionId) {
                 queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
                 queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
             }
-
             setMessageInput("");
         },
         onError: (error) => {
-            console.error('Message send error:', error);
             alert('Failed to send message: ' + (error instanceof Error ? error.message : 'Unknown error'));
         }
     });
@@ -147,14 +176,29 @@ export const useChat = () => {
         const messageContent = content || messageInput.trim();
         if (!messageContent) return;
 
-        if (!currentSessionId) {
+        // Clear input immediately
+        setMessageInput("");
+
+        if (currentSessionId) {
+            // For existing sessions, send with optimistic update
+            sendMessageMutation.mutate(messageContent);
+        } else {
+            // For new sessions, add to local messages temporarily
+            const tempUserMessage: Message = {
+                id: Date.now(),
+                chatSessionId: 0,
+                content: messageContent,
+                isUser: true,
+                createdAt: new Date()
+            };
+
+            setMessages(prev => [...prev, tempUserMessage]);
+
             setPendingMessage(messageContent);
             createSessionMutation.mutate({
                 personalityType,
                 title: messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '')
             });
-        } else {
-            sendMessageMutation.mutate(messageContent);
         }
     };
 
@@ -172,6 +216,12 @@ export const useChat = () => {
         setPendingMessage(null);
     };
 
+    const handleLoadMoreSessions = () => {
+        if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+        }
+    };
+
     const isLoading = sendMessageMutation.isPending || createSessionMutation.isPending;
 
     return {
@@ -185,6 +235,10 @@ export const useChat = () => {
         handleSendMessage,
         handleNewChat,
         handleChatSelect,
+        handleLoadMoreSessions,
+        hasMoreSessions: hasNextPage,
+        isLoadingMoreSessions: isFetchingNextPage,
+        isLoadingSessions,
         isLoading,
     };
 };
