@@ -18,10 +18,6 @@ export default function ChatPage() {
 
   const {
     chatbotStatus,
-    sendChatbotMessage,
-    handleUseChatbot,
-    handleSuggestionClick,
-    isChatbotLoading,
     showChatbotSuggestions,
     setShowChatbotSuggestions,
     resetChatbotState
@@ -41,81 +37,60 @@ export default function ChatPage() {
     isLoading: chatIsLoading
   } = useChat();
 
-  const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [selectedPersonalityGroup, setSelectedPersonalityGroup] = useState<PersonalityGroup | null>(null);
-  const [isUsingChatbot, setIsUsingChatbot] = useState(true);
 
-  const displayMessages = currentSessionId ? savedMessages : localMessages;
-  const isLoading = currentSessionId ? chatIsLoading : isChatbotLoading;
+  const displayMessages = savedMessages;
+  const isLoading = chatIsLoading;
+
+  useEffect(() => {
+    if (!currentSessionId && displayMessages.length === 0) {
+      setShowChatbotSuggestions(true);
+    }
+  }, [currentSessionId, displayMessages.length, setShowChatbotSuggestions]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [displayMessages]);
 
-  useEffect(() => {
-    if (!currentSessionId) {
-      handleUseChatbot(
-        setLocalMessages,
-        () => { },
-        () => { },
-        () => { },
-        setIsUsingChatbot
-      );
-    }
-  }, [currentSessionId]);
-
   const handlePersonalitySelect = (personalityCode: string) => {
     const prompt = `I am a ${personalityCode} personality type. Based on my personality, what Hunter College majors would you recommend for me and why?`;
-    currentSessionId
-      ? handleSendMessage(prompt, personalityCode)
-      : sendChatbotMessage(prompt, setLocalMessages);
+    handleSendMessage(prompt, personalityCode);
     setSelectedPersonalityGroup(null);
+    setShowChatbotSuggestions(false);
   };
 
   const handleUnknownPersonality = () => {
     const prompt = "I don't know my personality type. Can you help me find a Hunter College major that might be right for me? What questions should I consider?";
-    currentSessionId
-      ? handleSendMessage(prompt)
-      : sendChatbotMessage(prompt, setLocalMessages);
+    handleSendMessage(prompt);
     setSelectedPersonalityGroup(null);
+    setShowChatbotSuggestions(false);
   };
 
   const handleSuggestionClickLocal = (suggestion: string) => {
-    if (currentSessionId) {
-      setMessageInput(suggestion);
-      handleSendMessage(suggestion);
-    } else {
-      sendChatbotMessage(suggestion, setLocalMessages);
-    }
+    setMessageInput(suggestion);
+    handleSendMessage(suggestion);
+    setShowChatbotSuggestions(false);
   };
 
   const handleInputSend = (content: string) => {
-    currentSessionId
-      ? handleSendMessage(content)
-      : sendChatbotMessage(content, setLocalMessages);
-    if (!currentSessionId) setMessageInput("");
+    handleSendMessage(content);
+    if (!currentSessionId || displayMessages.length === 0) {
+      setShowChatbotSuggestions(false);
+    }
   };
 
   const handleNewChat = () => {
     chatHandleNewChat();
-    setLocalMessages([]);
     setSelectedPersonalityGroup(null);
     resetChatbotState();
-    setIsUsingChatbot(true);
-    handleUseChatbot(
-      setLocalMessages,
-      () => { },
-      () => { },
-      () => { },
-      setIsUsingChatbot
-    );
+    setShowChatbotSuggestions(true);
   };
 
   const handleChatSelect = (chatId: number) => {
     chatHandleSelect(chatId);
-    setIsUsingChatbot(false);
     setSelectedPersonalityGroup(null);
     resetChatbotState();
+    setShowChatbotSuggestions(false);
   };
 
   const showWelcomeScreen = !currentSessionId && displayMessages.length === 0 && showChatbotSuggestions;
@@ -179,8 +154,8 @@ export default function ChatPage() {
         </div>
 
         <ChatInput
-          messageInput={currentSessionId ? messageInput : ""}
-          setMessageInput={currentSessionId ? setMessageInput : () => { }}
+          messageInput={messageInput}
+          setMessageInput={setMessageInput}
           onSendMessage={handleInputSend}
           isLoading={isLoading}
           chatbotStatus={chatbotStatus}

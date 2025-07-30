@@ -37,6 +37,7 @@ export const insertUserSchema = createInsertSchema(users).pick({
   password_hash: true,
 });
 
+// ✅ FIXED: Include userId in the schema validation
 export const insertChatSessionSchema = createInsertSchema(chatSessions).pick({
   userId: true,
   title: true,
