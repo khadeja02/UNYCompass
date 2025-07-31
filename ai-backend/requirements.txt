@@ -1,9 +1,19 @@
-beautifulsoup4==4.13.4
+# Web framework
 Flask==3.1.1
-Flask_Cors==4.0.0
-langchain_openai==0.3.28
-numpy==1.24.3
-pinecone==7.3.0
+Flask-Cors==4.0.0
+
+# Environment and HTTP
 python-dotenv==1.1.1
-Requests==2.32.4
-sentence_transformers==5.0.0
+requests==2.32.4
+
+# Web scraping
+beautifulsoup4==4.13.4
+
+# AI and ML - updated for Python 3.12 compatibility
+langchain-openai==0.3.28
+pinecone-client>=3.0.0
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+
+# Production server
+gunicorn>=21.0.0
