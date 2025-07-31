@@ -2,16 +2,60 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
+// NEW: Import for forgot password functionality
+import ForgotPasswordForm from './ForgotPasswordForm';
 
 const AuthPage = () => {
-    const [isLogin, setIsLogin] = useState(true);
+    // CHANGED: Updated state to handle three views instead of just login/register
+    const [currentView, setCurrentView] = useState('login'); // 'login', 'register', 'forgot-password'
     const { login } = useAuth();
 
-    const switchToLogin = () => setIsLogin(true);
-    const switchToRegister = () => setIsLogin(false);
+    const switchToLogin = () => setCurrentView('login');
+    const switchToRegister = () => setCurrentView('register');
+
+    // NEW: Function to switch to forgot password view
+    const switchToForgotPassword = () => setCurrentView('forgot-password');
 
     const handleAuthSuccess = (user) => {
         login(user);
+    };
+
+    // NEW: Function to render different views based on currentView state
+    const renderCurrentView = () => {
+        switch (currentView) {
+            case 'login':
+                return (
+                    <LoginForm
+                        onLogin={handleAuthSuccess}
+                        switchToRegister={switchToRegister}
+                        // NEW: Pass forgot password switch function to LoginForm
+                        switchToForgotPassword={switchToForgotPassword}
+                    />
+                );
+            case 'register':
+                return (
+                    <RegisterForm
+                        onRegister={handleAuthSuccess}
+                        switchToLogin={switchToLogin}
+                    />
+                );
+            // NEW: Case for forgot password view
+            case 'forgot-password':
+                return (
+                    <ForgotPasswordForm
+                        switchToLogin={switchToLogin}
+                    />
+                );
+            default:
+                return (
+                    <LoginForm
+                        onLogin={handleAuthSuccess}
+                        switchToRegister={switchToRegister}
+                        // NEW: Pass forgot password switch function to LoginForm
+                        switchToForgotPassword={switchToForgotPassword}
+                    />
+                );
+        }
     };
 
     return (
@@ -52,17 +96,8 @@ const AuthPage = () => {
                     }}>COMPASS</h2>
                 </div>
                 
-                {isLogin ? (
-                    <LoginForm
-                        onLogin={handleAuthSuccess}
-                        switchToRegister={switchToRegister}
-                    />
-                ) : (
-                    <RegisterForm
-                        onRegister={handleAuthSuccess}
-                        switchToLogin={switchToLogin}
-                    />
-                )}
+                {/* CHANGED: Now renders different views using renderCurrentView function */}
+                {renderCurrentView()}
             </div>
         </div>
     );

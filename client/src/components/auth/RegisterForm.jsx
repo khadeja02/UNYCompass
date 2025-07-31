@@ -30,8 +30,8 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
             return;
         }
 
-        if (formData.password.length < 6) {
-            setError('Password must be at least 6 characters long');
+        if (formData.password.length < 8) {
+            setError('Password must be at least 8 characters long');
             return;
         }
 
@@ -239,8 +239,9 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
 
                 {error && (
                     <div style={{
-                        color: '#fecaca',
-                        background: 'rgba(220, 38, 38, 0.2)',
+                        color: 'grey',
+                        background: 'rgba(167, 100, 255, 0.1)',
+                        border: '1px solid rgba(187, 42, 244, 0.3)',
                         padding: '12px',
                         borderRadius: '8px',
                         fontSize: '0.875rem',

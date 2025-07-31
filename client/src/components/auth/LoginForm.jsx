@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
-const LoginForm = ({ onLogin, switchToRegister }) => {
+// CHANGED: Added switchToForgotPassword prop to function signature
+const LoginForm = ({ onLogin, switchToRegister, switchToForgotPassword }) => {
     const [formData, setFormData] = useState({
         username: '',
         password: ''
@@ -122,6 +123,7 @@ const LoginForm = ({ onLogin, switchToRegister }) => {
                     <div style={{ textAlign: 'right', marginTop: '4px' }}>
                         <button
                             type="button"
+                            onClick={switchToForgotPassword}
                             style={{
                                 background: 'none',
                                 border: 'none',
