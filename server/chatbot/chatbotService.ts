@@ -1,8 +1,15 @@
 import axios from 'axios';
 
 export class ChatbotService {
-    private static readonly FLASK_API_URL = 'http://localhost:5001';
-
+    private static readonly FLASK_API_URL =
+        process.env.FLASK_API_URL || "https://unycompass-production.up.railway.app";
+    // Debug logging
+    static {
+        console.log('🔍 Debug Info:');
+        console.log('🔍 process.env.FLASK_API_URL:', process.env.FLASK_API_URL);
+        console.log('🔍 Final FLASK_API_URL:', this.FLASK_API_URL);
+        console.log('🔍 All env vars:', Object.keys(process.env).filter(k => k.includes('FLASK')));
+    }
     static async callFlaskChatbot(question: string, personalityType?: string) {
         try {
             let contextualQuestion = question;
