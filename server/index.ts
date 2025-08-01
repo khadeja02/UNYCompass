@@ -1,12 +1,12 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { config } from 'dotenv'; // 👈 ADD THIS
+import { config } from 'dotenv';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
-// 👈 ADD THIS - Load environment variables FIRST
+// Load environment variables
 config();
 
-// 👈 ADD THIS - Verify critical env vars are loaded
+// Environment check
 console.log('🔧 Environment check:');
 console.log('  JWT_SECRET exists:', !!process.env.JWT_SECRET);
 console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
@@ -15,6 +15,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -56,22 +57,20 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  // Setup environment-specific serving
+  if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  const host = "127.0.0.1";
+  // Railway-compatible port configuration
+  const port = Number(process.env.PORT) || 3000;
+  const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1";
 
   server.listen(port, host, () => {
     console.log(`✅ Server is running at http://${host}:${port}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🚀 Ready to accept connections`);
   });
 })();
