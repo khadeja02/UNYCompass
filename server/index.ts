@@ -72,5 +72,7 @@ app.use((req, res, next) => {
     console.log(`✅ Server is running at http://${host}:${port}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🚀 Ready to accept connections`);
+    console.log('🔍 Railway PORT env var:', process.env.PORT);
+    console.log('🔍 All env vars:', Object.keys(process.env).filter(key => key.includes('PORT')));
   });
 })();
