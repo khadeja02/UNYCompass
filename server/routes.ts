@@ -30,14 +30,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // =================================
   app.use('/api', chatRoutes);
 
-  // Health check - EXACT same as original
-  app.get('/api/health', (req, res) => {
-    res.json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      services: ['auth', 'chat', 'chatbot']
-    });
-  });
+  // Health check endpoint removed - handled by serveStatic() in vite.ts
+  // This prevents duplicate route conflicts
 
   const httpServer = createServer(app);
   return httpServer;
