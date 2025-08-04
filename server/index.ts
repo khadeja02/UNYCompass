@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cors from "cors";
 
+console.log('🚨🚨🚨 RAILWAY UPDATE TEST v4.0 🚨🚨🚨');
 // Load environment variables
 config();
 
@@ -11,6 +12,7 @@ config();
 console.log('🔧 Environment check:');
 console.log('  JWT_SECRET exists:', !!process.env.JWT_SECRET);
 console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
+
 
 const app = express();
 
