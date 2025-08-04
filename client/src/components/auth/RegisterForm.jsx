@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createServerApiUrl } from '../config/api';
+import { createServerApiUrl } from '../../config/api';
 
 const RegisterForm = ({ onRegister, switchToLogin }) => {
     const [formData, setFormData] = useState({

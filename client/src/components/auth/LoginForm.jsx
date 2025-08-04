@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createServerApiUrl } from '../config/api';
+import { createServerApiUrl } from '../../config/api';
 
 // CHANGED: Added switchToForgotPassword prop to function signature
 const LoginForm = ({ onLogin, switchToRegister, switchToForgotPassword }) => {
