@@ -13,10 +13,14 @@ console.log('🔧 Environment check:');
 console.log('  JWT_SECRET exists:', !!process.env.JWT_SECRET);
 console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 
-
 const app = express();
 
-pp.use((req, res, next) => {
+// 1. FIRST: JSON parsing middleware (MUST come first)
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// 2. SECOND: CORS middleware (after JSON parsing)
+app.use((req, res, next) => {
   // Set CORS headers for ALL requests
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -31,26 +35,14 @@ pp.use((req, res, next) => {
   next();
 });
 
-// Make sure this comes BEFORE your middleware and routes:
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-// Logging middleware
+// 3. THIRD: Logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
-/*************  ✨ Windsurf Command ⭐  *************/
-/**
- * Overrides the default res.json method to capture the JSON response body.
- * 
- * @param bodyJson - The JSON response body to be sent.
- * @param args - Additional arguments passed to the original res.json method.
- * @returns The result of calling the original res.json method with the provided arguments.
- */
-
-/*******  d5214b03-5209-4e04-9594-1d68411da079  *******/  res.json = function (bodyJson, ...args) {
+  res.json = function (bodyJson, ...args) {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
@@ -74,6 +66,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// 4. LAST: Register routes
 (async () => {
   const server = await registerRoutes(app);
 
