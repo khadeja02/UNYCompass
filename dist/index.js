@@ -1034,13 +1034,27 @@ function serveStatic(app2) {
 __name(serveStatic, "serveStatic");
 
 // server/index.ts
+console.log("\u{1F6A8}\u{1F6A8}\u{1F6A8} RAILWAY UPDATE TEST v4.0 \u{1F6A8}\u{1F6A8}\u{1F6A8}");
 config2();
 console.log("\u{1F527} Environment check:");
 console.log("  JWT_SECRET exists:", !!process.env.JWT_SECRET);
 console.log("  DATABASE_URL exists:", !!process.env.DATABASE_PUBLIC_URL);
 var app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  const timestamp2 = (/* @__PURE__ */ new Date()).toISOString();
+  console.log(`\u{1F525} MANUAL CORS v3.0 [${timestamp2}] - ${req.method} ${req.path}`);
+  console.log(`\u{1F525} Origin: ${req.headers.origin}`);
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Credentials", "false");
+  if (req.method === "OPTIONS") {
+    console.log("\u2705 Handling OPTIONS preflight request");
+    return res.status(200).end();
+  }
+  console.log("\u2705 CORS headers set, proceeding to route");
+  next();
+});
 app.use((req, res, next) => {
   const start = Date.now();
   const path3 = req.path;

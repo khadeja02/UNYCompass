@@ -16,26 +16,24 @@ console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 
 const app = express();
 
-app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  console.log(`🔥 MANUAL CORS v3.0 [${timestamp}] - ${req.method} ${req.path}`);
-  console.log(`🔥 Origin: ${req.headers.origin}`);
-
-  // Set CORS headers manually for ALL requests
+pp.use((req, res, next) => {
+  // Set CORS headers for ALL requests
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'false'); // Must be false when origin is *
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('✅ Handling OPTIONS preflight request');
-    return res.status(200).end();
+    res.sendStatus(200);
+    return;
   }
 
-  console.log('✅ CORS headers set, proceeding to route');
   next();
 });
+
+// Make sure this comes BEFORE your middleware and routes:
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 // Logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
