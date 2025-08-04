@@ -61,7 +61,7 @@ def ask_question(question):
     except Exception as e:
         return {"error": f"Error processing question: {str(e)}"}
 
-# Flask API Routes
+# Flask API Routes - Root routes for backward compatibility
 @app.route('/', methods=['GET'])
 def health_check():
     return jsonify({"status": "healthy", "message": "Hunter College Chatbot API is running"})
@@ -85,6 +85,32 @@ def chat():
 @app.route('/status', methods=['GET'])
 def status():
     return jsonify({"status": "ready"})
+
+# Primary routes with /api/chatbot prefix to match frontend expectations
+@app.route('/api/chatbot/status', methods=['GET', 'OPTIONS'])
+def chatbot_status():
+    if request.method == 'OPTIONS':
+        return '', 200
+    return jsonify({"status": "ready", "service": "chatbot"})
+
+@app.route('/api/chatbot/ask', methods=['POST', 'OPTIONS'])
+def chatbot_ask():
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return jsonify({"error": "Please provide a 'message' field in your request"}), 400
+    
+    response = ask_question(data['message'])
+    if "error" in response:
+        return jsonify(response), 500
+    
+    return jsonify({
+        "question": response["question"],
+        "response": response["answer"],
+        "timestamp": response["timestamp"]
+    })
 
 if __name__ == '__main__':
     # Change to port 5001 to avoid conflict with your main Express server
