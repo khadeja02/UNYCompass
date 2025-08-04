@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { config } from 'dotenv';
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import cors from "cors";
 
 // Load environment variables
 config();
@@ -12,6 +13,15 @@ console.log('  JWT_SECRET exists:', !!process.env.JWT_SECRET);
 console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 
 const app = express();
+
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://unycompass.vercel.app',
+    'https://*.vercel.app'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -22,7 +32,16 @@ app.use((req, res, next) => {
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
+/*************  ✨ Windsurf Command ⭐  *************/
+/**
+ * Overrides the default res.json method to capture the JSON response body.
+ * 
+ * @param bodyJson - The JSON response body to be sent.
+ * @param args - Additional arguments passed to the original res.json method.
+ * @returns The result of calling the original res.json method with the provided arguments.
+ */
+
+/*******  d5214b03-5209-4e04-9594-1d68411da079  *******/  res.json = function (bodyJson, ...args) {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
