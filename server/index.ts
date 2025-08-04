@@ -16,11 +16,28 @@ console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 const app = express();
 
 // 1. FIRST: JSON parsing middleware (MUST come first)
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+console.log('🔧 Setting up express.json() middleware');
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// DEBUG: Check if body parsing is working
+app.use((req, res, next) => {
+  if (req.path.includes('/api/auth') && req.method === 'POST') {
+    console.error('🔧 MIDDLEWARE DEBUG - Path:', req.path);
+    console.error('🔧 MIDDLEWARE DEBUG - Method:', req.method);
+    console.error('🔧 MIDDLEWARE DEBUG - Body parsed:', !!req.body);
+    console.error('🔧 MIDDLEWARE DEBUG - Body content:', req.body);
+    console.error('🔧 MIDDLEWARE DEBUG - Content-Type:', req.headers['content-type']);
+    console.error('🔧 MIDDLEWARE DEBUG - Raw headers:', req.headers);
+  }
+  next();
+});
 
 // 2. SECOND: CORS middleware (after JSON parsing)
+console.log('🔧 Setting up CORS middleware');
 app.use((req, res, next) => {
+  console.error('🌐 CORS - Processing request:', req.method, req.path);
+
   // Set CORS headers for ALL requests
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -28,10 +45,12 @@ app.use((req, res, next) => {
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
+    console.error('✅ CORS - Handling OPTIONS preflight request');
     res.sendStatus(200);
     return;
   }
 
+  console.error('✅ CORS - Headers set, continuing to next middleware');
   next();
 });
 
@@ -68,6 +87,7 @@ app.use((req, res, next) => {
 
 // 4. LAST: Register routes
 (async () => {
+  console.log('🔧 Registering routes...');
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
