@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createServerApiUrl } from '../config/api';
 
 // CHANGED: Added switchToForgotPassword prop to function signature
 const LoginForm = ({ onLogin, switchToRegister, switchToForgotPassword }) => {
@@ -27,7 +28,7 @@ const LoginForm = ({ onLogin, switchToRegister, switchToForgotPassword }) => {
         try {
             console.log('Making fetch request to /api/auth/login...');
 
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch(createServerApiUrl('/api/auth/login'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
