@@ -10,112 +10,140 @@ export class ChatController {
         } catch (error) {
             res.status(500).json({ message: "Failed to fetch personality types" });
         }
-    }
+    };
 
-    // 👈 UPDATED: Create session for authenticated user
     createChatSession = async (req: any, res: Response) => {
         try {
-            // Extract user ID from authenticated request
+            if (!req.user || !req.user.userId) {
+                console.error("No authenticated user found");
+                return res.status(401).json({
+                    message: "Authentication required",
+                    error: "No user found in request"
+                });
+            }
+
             const sessionData = {
                 ...req.body,
-                userId: req.user.userId // 👈 Add user ID from auth middleware
+                userId: req.user.userId
             };
 
             const session = await ChatService.createChatSession(sessionData);
             res.json(session);
         } catch (error) {
-            console.error('Create chat session error:', error);
-            res.status(400).json({ message: "Invalid chat session data" });
-        }
-    }
+            console.error("Create chat session error:", error);
 
-    // 👈 UPDATED: Get sessions for authenticated user only
+            const errorMessage = error instanceof Error ? error.message : "Unknown error";
+            const errorDetails = error instanceof Error ? error.stack : error;
+
+            res.status(500).json({
+                message: "Failed to create chat session",
+                error: errorMessage,
+                details: errorDetails
+            });
+        }
+    };
+
     getChatSessions = async (req: any, res: Response) => {
         try {
-            const sessions = await ChatService.getChatSessionsByUserId(req.user.userId);
-            res.json(sessions);
+            const page = parseInt(req.query.page as string) || 1;
+            const limit = parseInt(req.query.limit as string) || 10;
+            const offset = (page - 1) * limit;
+
+            const totalSessions = await ChatService.getTotalSessionsByUserId(req.user.userId);
+            const sessions = await ChatService.getChatSessionsByUserId(req.user.userId, limit, offset);
+
+            res.json({
+                sessions,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(totalSessions / limit),
+                    totalSessions,
+                    hasMore: page * limit < totalSessions
+                }
+            });
         } catch (error) {
             res.status(500).json({ message: "Failed to fetch chat sessions" });
         }
-    }
+    };
 
-    // 👈 UPDATED: Add conversation context for continuity
     createMessage = async (req: any, res: Response) => {
         try {
             const validatedData = req.body;
-            const message = await ChatService.createMessage(validatedData);
 
-            // Generate AI response using Hunter chatbot with conversation context
+            const userMessage = await ChatService.createMessage(validatedData);
+
             if (validatedData.isUser) {
-                let aiResponseContent;
-
                 try {
-                    // 👈 NEW: Get conversation context
                     const recentMessages = await ChatService.getRecentMessages(
                         validatedData.chatSessionId,
-                        8 // Last 8 messages for context
+                        8
                     );
 
-                    // 👈 NEW: Build context string (exclude the current message since it's not saved yet)
                     const contextString = recentMessages.length > 0
-                        ? recentMessages.map(msg =>
-                            `${msg.isUser ? 'User' : 'Assistant'}: ${msg.content}`
-                        ).join('\n') + '\n\n'
-                        : '';
+                        ? recentMessages
+                            .map(msg => `${msg.isUser ? "User" : "Assistant"}: ${msg.content}`)
+                            .join("\n") + "\n\n"
+                        : "";
 
-                    // 👈 NEW: Send context + new message to AI
                     const fullPrompt = `${contextString}User: ${validatedData.content}`;
 
-                    console.log('Sending to AI with context:', fullPrompt);
+                    const chatbotResponse = await ChatbotService.callFlaskChatbot(fullPrompt);
 
-                    const chatbotResponse = await ChatbotService.callPythonChatbot(fullPrompt);
+                    const aiResponseContent = chatbotResponse?.success
+                        ? chatbotResponse.answer || chatbotResponse.response
+                        : "I'm having trouble accessing the Hunter College information right now. Please try asking about specific programs or requirements.";
 
-                    if ((chatbotResponse as any).success) {
-                        aiResponseContent = (chatbotResponse as any).answer;
-                    } else {
-                        aiResponseContent = "I'm having trouble accessing the Hunter College information right now. Please try asking about specific programs or requirements.";
-                    }
+                    const aiResponse = await ChatService.createMessage({
+                        chatSessionId: validatedData.chatSessionId,
+                        content: aiResponseContent,
+                        isUser: false,
+                    });
+
+                    await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
+
+                    res.json({ userMessage, aiResponse });
+
                 } catch (error) {
-                    console.error('Chatbot error in messages endpoint:', error);
-                    aiResponseContent = "I'm here to help you find information about Hunter College programs. What would you like to know about?";
+                    console.error("AI processing error:", error);
+
+                    const fallbackResponse = await ChatService.createMessage({
+                        chatSessionId: validatedData.chatSessionId,
+                        content: "I'm here to help you find information about Hunter College programs. What would you like to know about?",
+                        isUser: false,
+                    });
+
+                    await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
+                    res.json({ userMessage, aiResponse: fallbackResponse });
                 }
-
-                const aiResponse = await ChatService.createMessage({
-                    chatSessionId: validatedData.chatSessionId,
-                    content: aiResponseContent,
-                    isUser: false,
-                });
-
-                // 👈 NEW: Update chat session timestamp
-                await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
-
-                res.json({ userMessage: message, aiResponse });
             } else {
-                res.json(message);
+                res.json(userMessage);
             }
         } catch (error) {
-            console.error('Create message error:', error);
-            res.status(400).json({ message: "Invalid message data" });
+            console.error("Create message error:", error);
+            res.status(500).json({
+                message: "Failed to create message",
+                error: error instanceof Error ? error.message : "Unknown error"
+            });
         }
-    }
+    };
 
-    // 👈 UPDATED: Add user verification (optional security)
     getMessagesBySessionId = async (req: any, res: Response) => {
         try {
             const sessionId = parseInt(req.params.sessionId);
 
-            // Optional: Verify user owns this chat session
             const userSessions = await ChatService.getChatSessionsByUserId(req.user.userId);
             const sessionExists = userSessions.some(session => session.id === sessionId);
 
             if (!sessionExists) {
+                console.warn("Access denied to session:", sessionId);
                 return res.status(403).json({ message: "Access denied to this chat session" });
             }
 
             const messages = await ChatService.getMessagesBySessionId(sessionId);
             res.json(messages);
         } catch (error) {
+            console.error("Get messages error:", error);
             res.status(500).json({ message: "Failed to fetch messages" });
         }
-    }
+    };
 }

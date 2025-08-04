@@ -1,17 +1,11 @@
 // src/hooks/usePersonality.ts
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { PersonalityType } from '@shared/schema';
 import type { PersonalityGroup } from '@/lib/personalityData';
 
 export const usePersonality = () => {
     const [selectedPersonalityType, setSelectedPersonalityType] = useState<string>("");
     const [selectedPersonalityGroup, setSelectedPersonalityGroup] = useState<PersonalityGroup | null>(null);
-
-    // Fetch personality types (keeping original for compatibility)
-    const { data: personalityTypes } = useQuery<PersonalityType[]>({
-        queryKey: ["/api/personality-types"],
-    });
 
     // Handle personality group selection
     const handlePersonalityGroupSelect = (
@@ -54,12 +48,12 @@ export const usePersonality = () => {
         setShowChatbotSuggestions(false);
         createSessionMutation.mutate("unknown");
     };
+
     const resetPersonalityState = () => {
         setSelectedPersonalityType("");
         setSelectedPersonalityGroup(null);
         // Add any other personality-related state resets here
     };
-
 
     // Handle send message with pending logic
     const handleSendMessageWithPending = (
@@ -94,9 +88,6 @@ export const usePersonality = () => {
         selectedPersonalityType,
         selectedPersonalityGroup,
 
-        // Data
-        personalityTypes,
-
         // Setters
         setSelectedPersonalityType,
         setSelectedPersonalityGroup,
@@ -107,8 +98,6 @@ export const usePersonality = () => {
         handleBackToGroups,
         handleUnknownPersonalityType,
         handleSendMessageWithPending,
-        // ... other returns
         resetPersonalityState,
-
     };
 };

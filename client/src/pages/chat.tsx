@@ -1,103 +1,117 @@
-// client/src/pages/chat.tsx - Integrated with persistent storage
 import { useState, useEffect } from 'react';
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiRequest } from '@/lib/queryClient';
 import type { PersonalityGroup } from '@/lib/personalityData';
 
-// Import components
 import { ChatSidebar } from "@/components/ui/ChatSidebar";
 import { ChatHeader } from "@/components/ui/ChatHeader";
 import { ChatInput } from "@/components/ui/ChatInput";
 import { PersonalitySelector } from "@/components/ui/PersonalitySelector";
 
-// Import the updated useChat hook
+import { useChatbot } from '@/hooks/useChatbot';
 import { useChat } from '@/hooks/useChat';
 
 export default function ChatPage() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
 
-  // Use the updated chat hook that connects to persistent storage
+  const {
+    chatbotStatus,
+    showChatbotSuggestions,
+    setShowChatbotSuggestions,
+    resetChatbotState
+  } = useChatbot();
+
   const {
     currentSessionId,
     messageInput,
-    messages,
+    messages: savedMessages,
     textareaRef,
     messagesEndRef,
     setMessageInput,
     chatSessions,
     handleSendMessage,
-    handleNewChat,
-    handleChatSelect,
-    isLoading,
+    handleNewChat: chatHandleNewChat,
+    handleChatSelect: chatHandleSelect,
+    handleLoadMoreSessions,
+    hasMoreSessions,
+    isLoadingMoreSessions,
+    isLoadingSessions,
+    isLoading: chatIsLoading
   } = useChat();
 
-  // State for personality selection (only for welcome screen)
   const [selectedPersonalityGroup, setSelectedPersonalityGroup] = useState<PersonalityGroup | null>(null);
-  const [chatbotStatus, setChatbotStatus] = useState({
-    status: 'checking' as 'online' | 'offline' | 'checking',
-    message: 'Connecting...'
-  });
 
-  // Check chatbot status
+  const displayMessages = savedMessages;
+  const isLoading = chatIsLoading;
+
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const response = await apiRequest("GET", "/api/chatbot/status");
-        const data = await response.json();
-        setChatbotStatus({
-          status: data.pythonWorking ? 'online' : 'offline',
-          message: data.message
-        });
-      } catch (error) {
-        setChatbotStatus({ status: 'offline', message: 'Unable to connect' });
-      }
-    };
-    checkStatus();
-  }, []);
+    if (!currentSessionId && displayMessages.length === 0) {
+      setShowChatbotSuggestions(true);
+    }
+  }, [currentSessionId, displayMessages.length, setShowChatbotSuggestions]);
 
-  // Handle personality selection (creates new chat with personality context)
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [displayMessages]);
+
   const handlePersonalitySelect = (personalityCode: string) => {
     const prompt = `I am a ${personalityCode} personality type. Based on my personality, what Hunter College majors would you recommend for me and why?`;
-    handleSendMessage(prompt, personalityCode.toLowerCase());
+    handleSendMessage(prompt, personalityCode);
+    setSelectedPersonalityGroup(null);
+    setShowChatbotSuggestions(false);
   };
 
-  // Handle unknown personality
   const handleUnknownPersonality = () => {
     const prompt = "I don't know my personality type. Can you help me find a Hunter College major that might be right for me? What questions should I consider?";
-    handleSendMessage(prompt, 'unknown');
+    handleSendMessage(prompt);
+    setSelectedPersonalityGroup(null);
+    setShowChatbotSuggestions(false);
   };
 
-  // Handle suggestion clicks
-  const handleSuggestionClick = (suggestion: string) => {
+  const handleSuggestionClickLocal = (suggestion: string) => {
     handleSendMessage(suggestion);
+    setShowChatbotSuggestions(false);
   };
 
-  // Handle input send
   const handleInputSend = (content: string) => {
     handleSendMessage(content);
+    if (!currentSessionId || displayMessages.length === 0) {
+      setShowChatbotSuggestions(false);
+    }
   };
 
-  // Reset personality selection when starting new chat
-  const handleNewChatWithReset = () => {
-    handleNewChat();
+  const handleNewChat = () => {
+    chatHandleNewChat();
     setSelectedPersonalityGroup(null);
+    resetChatbotState();
+    setShowChatbotSuggestions(true);
   };
+
+  const handleChatSelect = (chatId: number) => {
+    chatHandleSelect(chatId);
+    setSelectedPersonalityGroup(null);
+    resetChatbotState();
+    setShowChatbotSuggestions(false);
+  };
+
+  const showWelcomeScreen = !currentSessionId && displayMessages.length === 0 && showChatbotSuggestions;
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar with chat history */}
       <ChatSidebar
-        onNewChat={handleNewChatWithReset}
+        onNewChat={handleNewChat}
         onChatSelect={handleChatSelect}
         currentSessionId={currentSessionId}
         chatbotStatus={chatbotStatus}
+        chatSessions={chatSessions}
+        onLoadMoreSessions={handleLoadMoreSessions}
+        hasMoreSessions={hasMoreSessions}
+        isLoadingMoreSessions={isLoadingMoreSessions}
+        isLoadingSessions={isLoadingSessions}
       />
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <ChatHeader
           theme={theme}
           toggleTheme={toggleTheme}
@@ -105,27 +119,24 @@ export default function ChatPage() {
           logout={logout}
         />
 
-        {/* Main Chat Area */}
         <div className="flex-1 flex flex-col min-h-0">
-          {messages.length === 0 && !currentSessionId ? (
-            // Welcome screen with personality selection (only when no active chat)
+          {showWelcomeScreen ? (
             <PersonalitySelector
               selectedPersonalityGroup={selectedPersonalityGroup}
               setSelectedPersonalityGroup={setSelectedPersonalityGroup}
               onPersonalitySelect={handlePersonalitySelect}
               onUnknownPersonality={handleUnknownPersonality}
-              onSuggestionClick={handleSuggestionClick}
+              onSuggestionClick={handleSuggestionClickLocal}
               chatbotStatus={chatbotStatus}
             />
           ) : (
-            // Chat interface (for active chats)
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex-1 p-6 overflow-y-auto min-h-0">
-                {messages.map((message) => (
+                {displayMessages.map((message) => (
                   <div key={message.id} className={`mb-4 ${message.isUser ? "text-right" : "text-left"}`}>
                     <div className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.isUser
-                        ? "bg-purple-600 text-white"
-                        : "bg-gray-200 dark:bg-gray-700"
+                      ? "bg-purple-600 text-white"
+                      : "bg-gray-200 dark:bg-gray-700"
                       }`}>
                       {message.content}
                     </div>
@@ -149,7 +160,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Message Input - Always visible */}
         <ChatInput
           messageInput={messageInput}
           setMessageInput={setMessageInput}

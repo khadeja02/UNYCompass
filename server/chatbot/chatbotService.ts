@@ -1,106 +1,99 @@
-import { spawn } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-// ES module __dirname equivalent
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import axios from 'axios';
 
 export class ChatbotService {
-    static callPythonChatbot(question: string, personalityType?: string) {
-        return new Promise((resolve, reject) => {
-            // Path to the Python API wrapper
-            const pythonScriptPath = path.join(__dirname, '..', '..', 'ai-backend', 'api', 'chatbot_api.py');
-
-            // Set working directory to the ai-backend directory so Python can find relative paths
-            const workingDirectory = path.join(__dirname, '..', '..', 'ai-backend');
-
-            console.log(`Calling Python script: ${pythonScriptPath}`);
-            console.log(`Working directory: ${workingDirectory}`);
-
-            // Prepare the question with personality context if provided
+    private static readonly FLASK_API_URL =
+        process.env.FLASK_API_URL || "https://unycompass-production.up.railway.app";
+    // Debug logging
+    static {
+        console.log('🔍 Debug Info:');
+        console.log('🔍 process.env.FLASK_API_URL:', process.env.FLASK_API_URL);
+        console.log('🔍 Final FLASK_API_URL:', this.FLASK_API_URL);
+        console.log('🔍 All env vars:', Object.keys(process.env).filter(k => k.includes('FLASK')));
+    }
+    static async callFlaskChatbot(question: string, personalityType?: string) {
+        try {
             let contextualQuestion = question;
             if (personalityType && personalityType !== 'chatbot' && personalityType !== 'unknown') {
                 contextualQuestion = `I am a ${personalityType.toUpperCase()} personality type. ${question}`;
             }
 
-            console.log(`Question to send: ${contextualQuestion}`);
+            console.log(`🌐 Calling Flask API: ${this.FLASK_API_URL}/chat`);
+            console.log(`📝 Question to send: ${contextualQuestion.substring(0, 100)}...`);
 
-            // Spawn Python process with correct working directory
-            const pythonProcess = spawn('python3', [pythonScriptPath, contextualQuestion], {
-                cwd: workingDirectory,
-                stdio: ['pipe', 'pipe', 'pipe']
+            const response = await axios.post(`${this.FLASK_API_URL}/chat`, {
+                message: contextualQuestion
+            }, {
+                timeout: 30000,
+                headers: { 'Content-Type': 'application/json' }
             });
 
-            let dataString = '';
-            let errorString = '';
+            console.log('✅ Flask API response received:', response.data);
 
-            pythonProcess.stdout.on('data', (data) => {
-                dataString += data.toString();
-            });
+            return {
+                success: true,
+                question: response.data.question,
+                answer: response.data.response,
+                response: response.data.response,
+                timestamp: response.data.timestamp
+            };
 
-            pythonProcess.stderr.on('data', (data) => {
-                errorString += data.toString();
-                // Log debug output for troubleshooting
-                const errorLine = data.toString().trim();
-                if (errorLine.startsWith('DEBUG:')) {
-                    console.log('Python Debug:', errorLine);
-                } else {
-                    console.error('Python STDERR:', errorLine);
-                }
-            });
+        } catch (error: any) {
+            console.error('❌ Flask API error:', error);
 
-            pythonProcess.on('close', (code) => {
-                console.log(`Python process exited with code ${code}`);
-                console.log(`Raw Python output: ${dataString}`);
+            let errorMessage = 'Failed to connect to chatbot service';
 
-                if (code !== 0) {
-                    console.error(`Python process exited with code ${code}`);
-                    if (errorString) {
-                        console.error('Python errors:', errorString);
-                    }
-                    reject(new Error(`Python process exited with code ${code}: ${errorString}`));
-                    return;
-                }
+            if (error.response) {
+                console.error('❌ Server error response:', error.response.data);
+                errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
+            } else if (error.request) {
+                console.error('❌ No response received:', error.request);
+                errorMessage = 'No response from chatbot service. Make sure Flask API is running on port 5001.';
+            } else {
+                console.error('❌ Request setup error:', error.message);
+                errorMessage = error.message || 'Unknown error occurred';
+            }
 
-                try {
-                    // Clean the output - remove any extra whitespace or debug output
-                    const cleanOutput = dataString.trim();
-                    if (!cleanOutput) {
-                        reject(new Error('No output from Python script'));
-                        return;
-                    }
-
-                    const result = JSON.parse(cleanOutput);
-                    console.log('Parsed Python response:', result);
-                    resolve(result);
-                } catch (parseError: any) {
-                    console.error('Failed to parse Python response:', dataString);
-                    console.error('Parse error:', parseError.message);
-                    reject(new Error(`Failed to parse Python response: ${parseError.message}`));
-                }
-            });
-
-            pythonProcess.on('error', (error) => {
-                console.error('Failed to start Python process:', error);
-                reject(new Error(`Failed to start Python process: ${error.message}`));
-            });
-
-            // Set a timeout to prevent hanging
-            setTimeout(() => {
-                console.log('Python process timeout - killing process');
-                pythonProcess.kill();
-                reject(new Error('Python process timeout after 30 seconds'));
-            }, 30000);
-        });
+            return {
+                success: false,
+                error: errorMessage
+            };
+        }
     }
 
     static async askQuestion(question: string, personalityType?: string) {
-        return await this.callPythonChatbot(question, personalityType);
+        return await this.callFlaskChatbot(question, personalityType);
     }
 
     static async checkStatus() {
-        return await this.callPythonChatbot('test');
+        try {
+            console.log(`🔍 Checking Flask API status: ${this.FLASK_API_URL}/status`);
+
+            const response = await axios.get(`${this.FLASK_API_URL}/status`, {
+                timeout: 10000
+            });
+
+            console.log('✅ Status check response:', response.data);
+
+            return {
+                success: true,
+                status: response.data.status,
+                message: 'Flask API is ready'
+            };
+
+        } catch (error: any) {
+            console.error('❌ Status check error:', error);
+
+            let errorMessage = 'Flask API is offline';
+            if (error.code === 'ECONNREFUSED') {
+                errorMessage = 'Flask API is not running. Please start the Flask server on port 5001.';
+            } else if (error.code === 'ENOTFOUND') {
+                errorMessage = 'Cannot reach Flask API. Check if it\'s running on localhost:5001.';
+            }
+
+            return {
+                success: false,
+                error: errorMessage
+            };
+        }
     }
 }
