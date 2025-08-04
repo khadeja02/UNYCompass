@@ -15,40 +15,17 @@ console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 const app = express();
 
 app.use(cors({
-  origin: (origin, callback) => {
-    console.log('🔍 CORS check - Origin:', origin);
-
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      console.log('✅ Allowing request with no origin');
-      return callback(null, true);
-    }
-
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'https://unycompass.vercel.app'
-    ];
-
-    // Check exact matches first
-    if (allowedOrigins.includes(origin)) {
-      console.log('✅ Origin matches allowed list:', origin);
-      return callback(null, true);
-    }
-
-    // Check if it's a unycompass vercel deployment
-    if (origin.includes('unycompass') && origin.includes('.vercel.app')) {
-      console.log('✅ Origin matches unycompass vercel pattern:', origin);
-      return callback(null, true);
-    }
-
-    console.log('❌ Origin not allowed:', origin);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins for now
   credentials: true,
-  // Add these additional options for preflight requests
-  optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  optionsSuccessStatus: 200
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
