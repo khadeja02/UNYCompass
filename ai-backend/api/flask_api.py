@@ -17,11 +17,23 @@ except ImportError as e:
     sys.exit(1)
 
 app = Flask(__name__)
-CORS(app, origins=[
-    "http://localhost:3000",
-    "https://unycompass.vercel.app", 
-    "https://*.vercel.app"
-])
+def is_allowed_origin(origin):
+    allowed_origins = [
+        "http://localhost:3000",
+        "https://unycompass.vercel.app"
+    ]
+    
+    if origin in allowed_origins:
+        return True
+    
+    # Allow any unycompass vercel deployment
+    if origin and "unycompass" in origin and ".vercel.app" in origin:
+        return True
+    
+    return False
+CORS(app, 
+     origins=lambda origin: is_allowed_origin(origin),
+     supports_credentials=True)
 
 def initialize_chatbot():
     """Initialize the chatbot and database"""

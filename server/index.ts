@@ -15,11 +15,22 @@ console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 const app = express();
 
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://unycompass.vercel.app',
-    'https://*.vercel.app'
-  ],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://unycompass.vercel.app'
+    ];
+
+    // Allow any vercel app URL for your project
+    if (allowedOrigins.includes(origin) ||
+      (origin.includes('unycompass') && origin.includes('.vercel.app'))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
