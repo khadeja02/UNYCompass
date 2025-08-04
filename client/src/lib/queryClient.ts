@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { createServerApiUrl, createAIApiUrl } from "@/config/api";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,7 +13,7 @@ function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Date.now() / 1000;
-    
+
     // Check if token expires within the next 5 minutes (300 seconds)
     return payload.exp < (currentTime + 300);
   } catch (error) {
@@ -26,7 +27,7 @@ const RETRY_DELAYS = [1000, 2000, 4000]; // 1s, 2s, 4s
 
 export async function apiRequest(
   method: string,
-  url: string,
+  endpoint: string, // Now expects endpoint, not full URL
   data?: unknown | undefined,
 ): Promise<Response> {
   // Get JWT token from localStorage
@@ -53,9 +54,14 @@ export async function apiRequest(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  console.log(`🔍 API Request: ${method} ${url}`, { 
-    hasToken: !!token, 
-    hasData: !!data 
+  // Determine which API to use based on endpoint
+  const url = endpoint.includes('/chatbot/')
+    ? createAIApiUrl(endpoint)    // Use AI backend for chatbot endpoints
+    : createServerApiUrl(endpoint); // Use server backend for everything else
+
+  console.log(`🔍 API Request: ${method} ${url}`, {
+    hasToken: !!token,
+    hasData: !!data
   });
 
   const res = await fetch(url, {
@@ -65,10 +71,10 @@ export async function apiRequest(
     credentials: "include", // Keep this for any cookie-based endpoints
   });
 
-  console.log(`📡 API Response: ${method} ${url} - ${res.status}`, { 
+  console.log(`📡 API Response: ${method} ${url} - ${res.status}`, {
     ok: res.ok,
     status: res.status,
-    statusText: res.statusText 
+    statusText: res.statusText
   });
 
   // Handle auth errors by clearing auth data
@@ -78,7 +84,7 @@ export async function apiRequest(
     localStorage.removeItem('user');
     // Trigger auth context update
     window.dispatchEvent(new Event('auth-logout'));
-    
+
     // Check if this was a token expiry
     try {
       const errorData = await res.clone().json();
@@ -118,7 +124,7 @@ export const getQueryFn: <T>(options: {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.dispatchEvent(new Event('auth-logout'));
-        
+
         if (unauthorizedBehavior === "returnNull") {
           return null;
         } else {
@@ -133,16 +139,22 @@ export const getQueryFn: <T>(options: {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      console.log(`🔍 Query Request: ${queryKey[0]}`, { hasToken: !!token });
+      // Determine which API to use based on endpoint
+      const endpoint = queryKey[0] as string;
+      const url = endpoint.includes('/chatbot/')
+        ? createAIApiUrl(endpoint)    // Use AI backend for chatbot endpoints
+        : createServerApiUrl(endpoint); // Use server backend for everything else
 
-      const res = await fetch(queryKey[0] as string, {
+      console.log(`🔍 Query Request: ${url}`, { hasToken: !!token });
+
+      const res = await fetch(url, {
         headers,
         credentials: "include",
       });
 
-      console.log(`📡 Query Response: ${queryKey[0]} - ${res.status}`, { 
+      console.log(`📡 Query Response: ${url} - ${res.status}`, {
         ok: res.ok,
-        status: res.status 
+        status: res.status
       });
 
       if (unauthorizedBehavior === "returnNull" && res.status === 401) {
