@@ -14,22 +14,26 @@ console.log('  DATABASE_URL exists:', !!process.env.DATABASE_PUBLIC_URL);
 
 const app = express();
 
-app.use(cors({
-  origin: true, // Allow all origins for now
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin'
-  ],
-  optionsSuccessStatus: 200
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`🔥 MANUAL CORS v3.0 [${timestamp}] - ${req.method} ${req.path}`);
+  console.log(`🔥 Origin: ${req.headers.origin}`);
 
+  // Set CORS headers manually for ALL requests
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'false'); // Must be false when origin is *
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    console.log('✅ Handling OPTIONS preflight request');
+    return res.status(200).end();
+  }
+
+  console.log('✅ CORS headers set, proceeding to route');
+  next();
+});
 // Logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
