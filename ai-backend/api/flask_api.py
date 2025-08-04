@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 
+print("🚨 FLASK API v2.0 DEPLOYED 🚨")
 # Add the chatbot directory to Python path
 chatbot_dir = Path(__file__).parent.parent / "chatbot"
 sys.path.append(str(chatbot_dir))
