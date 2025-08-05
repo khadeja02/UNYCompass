@@ -8,6 +8,7 @@ from pinecone import Pinecone, ServerlessSpec
 import hashlib
 import time
 from pathlib import Path
+import requests
 
 # Load environment variables - fix the paths
 current_dir = Path(__file__).parent
@@ -98,59 +99,124 @@ class UNYCompassDatabase:
         
         return [match['metadata']['text'] for match in results['matches'] if match['score'] > 0.2]
 
+class ConversationMemory:
+    """Simple conversation memory to track context"""
+    def __init__(self):
+        self.mentioned_programs = set()
+        self.broken_links = set()
+        self.user_interests = []
+        self.conversation_history = []
+    
+    def add_exchange(self, question, response):
+        self.conversation_history.append({
+            'question': question,
+            'response': response,
+            'timestamp': time.time()
+        })
+        # Keep only last 5 exchanges
+        if len(self.conversation_history) > 5:
+            self.conversation_history.pop(0)
+    
+    def has_mentioned_program(self, program):
+        return program.lower() in [p.lower() for p in self.mentioned_programs]
+    
+    def add_mentioned_program(self, program):
+        self.mentioned_programs.add(program)
+    
+    def add_broken_link(self, link):
+        self.broken_links.add(link)
+    
+    def is_link_known_broken(self, link):
+        return link in self.broken_links
+
+def validate_url(url):
+    """Check if URL is accessible"""
+    try:
+        response = requests.head(url, timeout=5, allow_redirects=True)
+        return response.status_code == 200
+    except:
+        return False
+
 class UNYCompassBot:
     def __init__(self, vector_db):
         self.vector_db = vector_db
-        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.3)
+        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.7)  # Increased temperature for more natural responses
+        self.memory = ConversationMemory()
+    
+    def get_conversation_context(self):
+        """Get recent conversation context"""
+        if not self.memory.conversation_history:
+            return ""
+        
+        context = "Recent conversation:\n"
+        for exchange in self.memory.conversation_history[-3:]:  # Last 3 exchanges
+            context += f"Q: {exchange['question'][:100]}...\n"
+            context += f"A: {exchange['response'][:150]}...\n\n"
+        
+        return context
+    
+    def detect_frustration_indicators(self, question):
+        """Detect if user is frustrated with links or repetitive responses"""
+        frustration_keywords = [
+            "not work", "broken", "doesn't work", "link", "same", "again", 
+            "repeat", "robotic", "template", "copy paste", "generic"
+        ]
+        return any(keyword in question.lower() for keyword in frustration_keywords)
     
     def answer_question(self, question):
         chunks = self.vector_db.search(question)
         
         if not chunks:
-            return "I don't have information on that topic. Please make sure the hunter_content.txt file contains the relevant information."
+            return "I don't have information on that topic. You might want to visit the Hunter College website directly or contact their admissions office at (212) 772-4490."
         
         context = "\n\n".join(chunks)
-        prompt = f"""Context: {context}
+        conversation_context = self.get_conversation_context()
         
-Overview: 
-You are a Hunter College academic advisor. Answer the student's question using the information provided above.
-Be helpful and informative. If you can, include relevant URLs from the sources. Do not respond saying "according to Hunter sources"
-Treat all information from the hunter website as factual. Only cite sources from the official Hunter College website.
-Only give answers that relate to Hunter College major programs or pathways. If the user asks about general subject of programs
-please list the majors that relate to that subject as well as the corresponding links.
+        # Check if user seems frustrated
+        is_frustrated = self.detect_frustration_indicators(question)
+        
+        # Build dynamic prompt based on context
+        if is_frustrated:
+            tone_instruction = """
+IMPORTANT: The user seems frustrated with previous responses. 
+- Be more conversational and less formal
+- Don't use excessive formatting 
+- Acknowledge if you've been repetitive
+- Provide direct, helpful answers
+- If links were mentioned as broken, apologize and provide alternatives
+"""
+        else:
+            tone_instruction = """
+Be conversational and helpful. Respond naturally like a knowledgeable advisor would.
+"""
+        
+        prompt = f"""You are a helpful Hunter College academic advisor chatting with a student. 
+
+{conversation_context}
+
+Context from Hunter College: {context}
+
+{tone_instruction}
 
 Guidelines:
-- be helpful and encouraging to students
-- include specific names of programs and degree types (BA, BS, MA, etc.), and requirements if needed
-- ALWAYS give relevant URLS so students can check the hunter website themself
-- focus on the academic programs, majors and pathways
-- if asked about specific programs (i.e. Nursing), list all related majors with the links
+- Answer naturally and conversationally
+- Include program names and degree types when relevant
+- If you mention a specific URL, make sure it's from the context provided
+- If you don't have a specific URL, just say "check the Hunter College website"
+- Be encouraging and supportive
+- Suggest talking to official advisors when appropriate
+- Don't overuse markdown formatting - keep it simple
+- Focus on being helpful rather than following a template
 
-Ethics:
-- Always answer as if giving a suggestion and not a requirement
-- emphasize students have choices and can explore their interests at Hunter
-- encourage them to talk to official advisors (give the advisor contact info if needed), attend info sessions, etc.
+Student's question: {question}
 
-Tone:
-- be encouraging
-- avoid academic jargon, you are supposed to be relatable to the student
-- be conversational but also professional
-- be enthusiastic about Hunter programs
-
-Formatting Requirements:
-- Format your response using Markdown syntax
-- Use headers (##) for main sections
-- Use bullet points (-) for lists of programs or requirements
-- Use **bold** for program names and important terms
-- Use links [text](url) for all URLs
-- Use > blockquotes for important notes or tips
-- Use `code formatting` for course codes (like CHEM 101)
-- Structure your response clearly with proper spacing
-
-Question: {question}
-Answer:"""
+Response:"""
        
         response = self.llm.invoke(prompt)
+        
+        # Store this exchange in memory
+        self.memory.add_exchange(question, response.content)
+        
         return response.content
 
 # Helper function for backwards compatibility
@@ -163,18 +229,18 @@ def main():
     db = UNYCompassDatabase()
     bot = UNYCompassBot(db)
     
-    print("Hunter College Advisor Ready!")
+    print("Hunter College Advisor Ready! (Type 'quit' to exit)")
     
     while True:
         try:
-            user_input = input("User: ").strip()
+            user_input = input("\nStudent: ").strip()
             
             if user_input.lower() in ['quit', 'exit']:
-                print("Goodbye!")
+                print("Goodbye! Good luck with your studies!")
                 break
                 
             else:
-                print("UNY Compass Chatbot:", bot.answer_question(user_input))
+                print(f"\nAdvisor: {bot.answer_question(user_input)}")
         except KeyboardInterrupt:
             break
 
