@@ -4,12 +4,16 @@ import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 // NEW: Import for forgot password functionality
 import ForgotPasswordForm from './ForgotPasswordForm';
+// NEW: Import for landing page functionality
+import LandingPage from './LandingPage';
 
 const AuthPage = () => {
-    // CHANGED: Updated state to handle three views instead of just login/register
-    const [currentView, setCurrentView] = useState('login'); // 'login', 'register', 'forgot-password'
+    // CHANGED: Updated state to handle four views instead of three (added 'landing')
+    const [currentView, setCurrentView] = useState('landing'); // 'landing', 'login', 'register', 'forgot-password'
     const { login } = useAuth();
 
+    // NEW: Function to switch to landing view
+    const switchToLanding = () => setCurrentView('landing');
     const switchToLogin = () => setCurrentView('login');
     const switchToRegister = () => setCurrentView('register');
 
@@ -23,6 +27,9 @@ const AuthPage = () => {
     // NEW: Function to render different views based on currentView state
     const renderCurrentView = () => {
         switch (currentView) {
+            // NEW: Case for landing page view
+            case 'landing':
+                return <LandingPage switchToLogin={switchToLogin} />;
             case 'login':
                 return (
                     <LoginForm
@@ -47,16 +54,15 @@ const AuthPage = () => {
                     />
                 );
             default:
-                return (
-                    <LoginForm
-                        onLogin={handleAuthSuccess}
-                        switchToRegister={switchToRegister}
-                        // NEW: Pass forgot password switch function to LoginForm
-                        switchToForgotPassword={switchToForgotPassword}
-                    />
-                );
+                // CHANGED: Default case now returns landing page instead of login
+                return <LandingPage switchToLogin={switchToLogin} />;
         }
     };
+
+    // CHANGED: Conditional rendering - landing page has its own styling, others use the card layout
+    if (currentView === 'landing') {
+        return renderCurrentView();
+    }
 
     return (
         <div style={{

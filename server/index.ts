@@ -42,7 +42,8 @@ app.use((req, res, next) => {
   // Allow specific origins (instead of wildcard when using credentials)
   const allowedOrigins = [
     'http://localhost:3000',
-    'https://unycompass.vercel.app'
+    'https://unycompass.vercel.app',
+    'http://127.0.0.1:3000'
   ];
 
   // Check if origin is allowed or is a vercel deployment
