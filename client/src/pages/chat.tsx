@@ -156,7 +156,7 @@ export default function ChatPage() {
                       </AvatarFallback>
                     </Avatar>
                     <div className={`max-w-[75%] ${message.isUser
-                      ? 'bg-blue-600 text-white rounded-2xl rounded-tr-md px-4 py-3 shadow-md'
+                      ? 'bg-blue-100 text-gray-900 dark:bg-blue-200 dark:text-gray-800 rounded-2xl rounded-tr-md px-4 py-3 shadow-md'
                       : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-tl-md px-4 py-3 shadow-sm'
                       }`}>
                       <MarkdownMessage
