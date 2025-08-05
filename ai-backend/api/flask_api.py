@@ -5,7 +5,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
 
-print("🚨 FLASK API v2.0 DEPLOYED 🚨")
 # Add the chatbot directory to Python path
 chatbot_dir = Path(__file__).parent.parent / "chatbot"
 sys.path.append(str(chatbot_dir))
@@ -92,7 +91,14 @@ def status():
 def chatbot_status():
     if request.method == 'OPTIONS':
         return '', 200
-    return jsonify({"status": "ready", "service": "chatbot"})
+    
+    # Return format that frontend expects
+    return jsonify({
+        "status": "online", 
+        "pythonWorking": True,
+        "message": "Hunter AI chatbot is ready",
+        "service": "chatbot"
+    })
 
 @app.route('/api/chatbot/ask', methods=['POST', 'OPTIONS'])
 def chatbot_ask():
