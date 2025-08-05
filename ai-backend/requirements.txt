@@ -1,10 +1,21 @@
+# Core AI and RAG dependencies
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+sentence-transformers>=2.2.0
+pinecone>=4.0.0
+numpy>=1.24.0
+
+# Environment and utilities
+python-dotenv==1.1.1
+
+# Web scraping dependencies
+beautifulsoup4==4.13.4
+requests==2.32.4
+
+# API dependencies
 Flask==3.1.1
 Flask-Cors==4.0.0
-python-dotenv==1.1.1
-requests==2.32.4
-beautifulsoup4==4.13.4
-langchain-openai==0.3.28
-pinecone>=4.0.0
-sentence-transformers>=2.2.0
-numpy>=1.24.0
+
+# Production server
 gunicorn>=21.0.0

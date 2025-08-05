@@ -4,6 +4,7 @@ from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
+import re
 
 # Add the chatbot directory to Python path
 chatbot_dir = Path(__file__).parent.parent / "chatbot"
@@ -18,37 +19,50 @@ except ImportError as e:
 
 app = Flask(__name__)
 
-# Simple CORS configuration that works reliably
-CORS(app, 
+CORS(app,
      origins=[
          "http://localhost:3000",
-         "https://unycompass.vercel.app",
-         r"https://.*unycompass.*\.vercel\.app"  # Regex pattern for vercel deployments
+         "https://unycompass.vercel.app"
      ],
-     supports_credentials=True)
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "OPTIONS"])
 
-def initialize_chatbot():
-    """Initialize the chatbot and database"""
-    try:
-        # Initialize the database
-        db = UNYCompassDatabase()
-        
-        # Create the bot
-        bot = UNYCompassBot(db)
-        return bot, None
-    except Exception as e:
-        return None, f"Error initializing chatbot: {str(e)}"
+# Add custom origin checker if using regex
+@app.after_request
+def apply_cors(response):
+    origin = request.headers.get('Origin')
+    if origin and re.match(r"https:\/\/.*unycompass.*\.vercel\.app", origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
+
+# Initialize the chatbot ONCE when the server starts
+print("🤖 Initializing Hunter College Chatbot...")
+try:
+    db = UNYCompassDatabase()
+    bot = UNYCompassBot(db)
+    print("✅ Chatbot initialized successfully!")
+    CHATBOT_READY = True
+    CHATBOT_ERROR = None
+except Exception as e:
+    print(f"❌ Failed to initialize chatbot: {e}")
+    CHATBOT_READY = False
+    CHATBOT_ERROR = str(e)
+    bot = None
 
 def ask_question(question):
     """Ask a question to the chatbot and return the response"""
+    if not CHATBOT_READY:
+        return {"error": f"Chatbot not available: {CHATBOT_ERROR}"}
+    
     if not question or not question.strip():
         return {"error": "Question cannot be empty"}
     
     try:
-        bot, error = initialize_chatbot()
-        if error:
-            return {"error": error}
-        
+        # Use the SAME bot instance for all requests
         answer = bot.answer_question(question.strip())
         
         return {
@@ -64,7 +78,11 @@ def ask_question(question):
 # Flask API Routes - Root routes for backward compatibility
 @app.route('/', methods=['GET'])
 def health_check():
-    return jsonify({"status": "healthy", "message": "Hunter College Chatbot API is running"})
+    return jsonify({
+        "status": "healthy", 
+        "message": "Hunter College Chatbot API is running",
+        "chatbot_ready": CHATBOT_READY
+    })
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -84,7 +102,11 @@ def chat():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "ready"})
+    return jsonify({
+        "status": "ready" if CHATBOT_READY else "error",
+        "chatbot_ready": CHATBOT_READY,
+        "error": CHATBOT_ERROR if not CHATBOT_READY else None
+    })
 
 # Primary routes with /api/chatbot prefix to match frontend expectations
 @app.route('/api/chatbot/status', methods=['GET', 'OPTIONS'])
@@ -94,9 +116,9 @@ def chatbot_status():
     
     # Return format that frontend expects
     return jsonify({
-        "status": "online", 
-        "pythonWorking": True,
-        "message": "Hunter AI chatbot is ready",
+        "status": "online" if CHATBOT_READY else "error", 
+        "pythonWorking": CHATBOT_READY,
+        "message": "Hunter AI chatbot is ready" if CHATBOT_READY else f"Chatbot error: {CHATBOT_ERROR}",
         "service": "chatbot"
     })
 
@@ -118,6 +140,20 @@ def chatbot_ask():
         "response": response["answer"],
         "timestamp": response["timestamp"]
     })
+
+# Optional: Reset conversation memory endpoint
+@app.route('/api/chatbot/reset', methods=['POST'])
+def reset_conversation():
+    """Reset the conversation memory for a fresh start"""
+    if not CHATBOT_READY:
+        return jsonify({"error": "Chatbot not available"}), 500
+    
+    try:
+        # Reset the conversation memory
+        bot.memory = type(bot.memory)()  # Create new memory instance
+        return jsonify({"message": "Conversation memory reset successfully"})
+    except Exception as e:
+        return jsonify({"error": f"Failed to reset conversation: {str(e)}"}), 500
 
 if __name__ == '__main__':
     # Change to port 5001 to avoid conflict with your main Express server
