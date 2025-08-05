@@ -102,10 +102,10 @@ class UNYCompassDatabase:
 class ConversationMemory:
     """Simple conversation memory to track context"""
     def __init__(self):
+        self.user_interests = {}
         self.mentioned_programs = set()
-        self.broken_links = set()
-        self.user_interests = []
         self.conversation_history = []
+        self.user_frustrations = []
     
     def add_exchange(self, question, response):
         self.conversation_history.append({
@@ -117,107 +117,142 @@ class ConversationMemory:
         if len(self.conversation_history) > 5:
             self.conversation_history.pop(0)
     
-    def has_mentioned_program(self, program):
-        return program.lower() in [p.lower() for p in self.mentioned_programs]
+    def add_user_interest(self, category, value):
+        if category not in self.user_interests:
+            self.user_interests[category] = []
+        self.user_interests[category].append(value)
     
-    def add_mentioned_program(self, program):
-        self.mentioned_programs.add(program)
-    
-    def add_broken_link(self, link):
-        self.broken_links.add(link)
-    
-    def is_link_known_broken(self, link):
-        return link in self.broken_links
-
-def validate_url(url):
-    """Check if URL is accessible"""
-    try:
-        response = requests.head(url, timeout=5, allow_redirects=True)
-        return response.status_code == 200
-    except:
-        return False
+    def get_conversation_context(self):
+        if not self.conversation_history:
+            return ""
+        
+        context = "Previous conversation:\n"
+        for exchange in self.conversation_history[-2:]:
+            context += f"Student: {exchange['question'][:80]}...\n"
+            context += f"You: {exchange['response'][:100]}...\n\n"
+        return context
 
 class UNYCompassBot:
     def __init__(self, vector_db):
         self.vector_db = vector_db
-        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.7)  # Increased temperature for more natural responses
+        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.8)
         self.memory = ConversationMemory()
     
-    def get_conversation_context(self):
-        """Get recent conversation context"""
-        if not self.memory.conversation_history:
-            return ""
+    def detect_question_type(self, question):
+        """Categorize what the user is asking about"""
+        question_lower = question.lower()
         
-        context = "Recent conversation:\n"
-        for exchange in self.memory.conversation_history[-3:]:  # Last 3 exchanges
-            context += f"Q: {exchange['question'][:100]}...\n"
-            context += f"A: {exchange['response'][:150]}...\n\n"
+        # Broad exploration questions
+        exploration_keywords = ['help picking', 'choose major', 'what major', 'undecided', 'not sure', 'explore']
+        if any(keyword in question_lower for keyword in exploration_keywords):
+            return 'exploration'
         
-        return context
+        # Specific program questions
+        if 'biology' in question_lower or 'chemistry' in question_lower or 'physics' in question_lower:
+            return 'specific_program'
+        
+        # Frustration/complaint
+        frustration_keywords = ['didn\'t ask', 'you assumed', 'why did you', 'you didn\'t', 'without asking']
+        if any(keyword in question_lower for keyword in frustration_keywords):
+            return 'frustration'
+        
+        # Requirements/logistics
+        if 'requirements' in question_lower or 'credits' in question_lower or 'apply' in question_lower:
+            return 'logistics'
+            
+        return 'general'
     
-    def detect_frustration_indicators(self, question):
-        """Detect if user is frustrated with links or repetitive responses"""
-        frustration_keywords = [
-            "not work", "broken", "doesn't work", "link", "same", "again", 
-            "repeat", "robotic", "template", "copy paste", "generic"
-        ]
-        return any(keyword in question.lower() for keyword in frustration_keywords)
+    def handle_exploration_question(self, question, context):
+        """Handle broad 'help me pick a major' type questions"""
+        prompt = f"""You are a helpful Hunter College academic advisor talking to a student who needs help choosing a major.
+
+{context}
+
+IMPORTANT: The student is asking for help exploring majors, which means:
+- DO NOT immediately suggest specific programs
+- Start by asking them questions to understand their interests
+- Be conversational and supportive
+- Ask about their interests, career goals, favorite subjects, etc.
+- Only suggest specific majors AFTER you understand what they're looking for
+
+Context from Hunter College database: {context}
+
+Student question: {question}
+
+Respond like a real advisor would - ask questions first, suggest programs later."""
+
+        return self.llm.invoke(prompt).content
+    
+    def handle_frustration(self, question, context):
+        """Handle when user is frustrated with previous responses"""
+        prompt = f"""The student is frustrated with your previous responses. They feel you made assumptions or didn't listen to them properly.
+
+Previous conversation: {self.memory.get_conversation_context()}
+
+Context: {context}
+
+IMPORTANT:
+- Acknowledge their frustration genuinely
+- Apologize for not asking questions first
+- Start over with a better approach
+- Ask them what they're actually interested in
+- Be more conversational and less formal
+
+Student's frustrated message: {question}
+
+Respond with empathy and start fresh."""
+
+        return self.llm.invoke(prompt).content
+    
+    def handle_specific_program(self, question, context):
+        """Handle questions about specific programs"""
+        prompt = f"""The student is asking about a specific program or field at Hunter College.
+
+Context from Hunter: {context}
+
+Give them helpful information about the program they asked about. Include relevant details like degree types, requirements, and career paths. If you have specific URLs from the context, include them.
+
+Student question: {question}
+
+Be helpful and informative about the specific program they're interested in."""
+
+        return self.llm.invoke(prompt).content
     
     def answer_question(self, question):
+        """Main method to answer student questions"""
+        # Get relevant context from database
         chunks = self.vector_db.search(question)
+        context = "\n\n".join(chunks) if chunks else "Limited information available."
         
-        if not chunks:
-            return "I don't have information on that topic. You might want to visit the Hunter College website directly or contact their admissions office at (212) 772-4490."
+        # Detect what type of question this is
+        question_type = self.detect_question_type(question)
         
-        context = "\n\n".join(chunks)
-        conversation_context = self.get_conversation_context()
-        
-        # Check if user seems frustrated
-        is_frustrated = self.detect_frustration_indicators(question)
-        
-        # Build dynamic prompt based on context
-        if is_frustrated:
-            tone_instruction = """
-IMPORTANT: The user seems frustrated with previous responses. 
-- Be more conversational and less formal
-- Don't use excessive formatting 
-- Acknowledge if you've been repetitive
-- Provide direct, helpful answers
-- If links were mentioned as broken, apologize and provide alternatives
-"""
+        # Route to appropriate handler
+        if question_type == 'exploration':
+            response = self.handle_exploration_question(question, context)
+        elif question_type == 'frustration':
+            response = self.handle_frustration(question, context)
+        elif question_type == 'specific_program':
+            response = self.handle_specific_program(question, context)
         else:
-            tone_instruction = """
-Be conversational and helpful. Respond naturally like a knowledgeable advisor would.
-"""
-        
-        prompt = f"""You are a helpful Hunter College academic advisor chatting with a student. 
+            # General response
+            conversation_context = self.memory.get_conversation_context()
+            prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
 
 {conversation_context}
 
-Context from Hunter College: {context}
+Hunter College information: {context}
 
-{tone_instruction}
+Student question: {question}
 
-Guidelines:
-- Answer naturally and conversationally
-- Include program names and degree types when relevant
-- If you mention a specific URL, make sure it's from the context provided
-- If you don't have a specific URL, just say "check the Hunter College website"
-- Be encouraging and supportive
-- Suggest talking to official advisors when appropriate
-- Don't overuse markdown formatting - keep it simple
-- Focus on being helpful rather than following a template
-
-Student's question: {question}
-
-Response:"""
-       
-        response = self.llm.invoke(prompt)
+Be helpful, friendly, and conversational. Avoid excessive formatting."""
+            
+            response = self.llm.invoke(prompt).content
         
-        # Store this exchange in memory
-        self.memory.add_exchange(question, response.content)
+        # Store this exchange
+        self.memory.add_exchange(question, response)
         
-        return response.content
+        return response
 
 # Helper function for backwards compatibility
 def get_database():
