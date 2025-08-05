@@ -7,6 +7,10 @@ import { ChatSidebar } from "@/components/ui/ChatSidebar";
 import { ChatHeader } from "@/components/ui/ChatHeader";
 import { ChatInput } from "@/components/ui/ChatInput";
 import { PersonalitySelector } from "@/components/ui/PersonalitySelector";
+import { MarkdownMessage } from "@/components/ui/MarkdownMessage";
+import { TypingIndicator } from "@/components/ui/TypingIndicator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { User, Bot } from "lucide-react";
 
 import { useChatbot } from '@/hooks/useChatbot';
 import { useChat } from '@/hooks/useChat';
@@ -131,28 +135,43 @@ export default function ChatPage() {
             />
           ) : (
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex-1 p-6 overflow-y-auto min-h-0">
+              <div className="chat-messages flex-1 p-6 overflow-y-auto min-h-0 space-y-4">
                 {displayMessages.map((message) => (
-                  <div key={message.id} className={`mb-4 ${message.isUser ? "text-right" : "text-left"}`}>
-                    <div className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.isUser
-                      ? "bg-purple-600 text-white"
-                      : "bg-gray-200 dark:bg-gray-700"
+                  <div
+                    key={message.id}
+                    className={`flex items-start gap-3 ${message.isUser ? 'flex-row-reverse' : 'flex-row'
+                      }`}
+                  >
+                    {/* Avatar */}
+                    <Avatar className={`w-8 h-8 flex-shrink-0 ${message.isUser
+                      ? 'bg-purple-600'
+                      : 'bg-blue-600'
                       }`}>
-                      {message.content}
+                      <AvatarFallback>
+                        {message.isUser ? (
+                          <User className="h-4 w-4 text-white" />
+                        ) : (
+                          <Bot className="h-4 w-4 text-white" />
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    {/* Message Content */}
+                    <div className={`max-w-[75%] ${message.isUser
+                      ? 'bg-purple-600 text-white rounded-2xl rounded-tr-md px-4 py-3'
+                      : 'bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-md px-4 py-3'
+                      }`}>
+                      <MarkdownMessage
+                        content={message.content}
+                        isUser={message.isUser}
+                        className="chat-message"
+                      />
                     </div>
                   </div>
                 ))}
 
-                {isLoading && (
-                  <div className="text-left mb-4">
-                    <div className="inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700">
-                      <div className="flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
-                        <span className="text-gray-600 dark:text-gray-400">Hunter AI is thinking...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Show typing indicator when AI is responding */}
+                {isLoading && <TypingIndicator />}
 
                 <div ref={messagesEndRef} />
               </div>
