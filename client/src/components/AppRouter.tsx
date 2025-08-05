@@ -1,6 +1,6 @@
 import { Switch, Route } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
-import AuthPage from "@/components/auth/AuthPage.jsx";
+import AuthPage from "@/components/auth/AuthPage";
 import ChatPage from "@/pages/chat";
 import NotFound from "@/pages/not-found";
 

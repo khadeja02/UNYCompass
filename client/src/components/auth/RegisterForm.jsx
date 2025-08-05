@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createServerApiUrl } from '../../config/api';
 
 const RegisterForm = ({ onRegister, switchToLogin }) => {
     const [formData, setFormData] = useState({
@@ -49,7 +50,7 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
         try {
             console.log('Making fetch request to /api/auth/register...');
 
-            const response = await fetch('/api/auth/register', {
+            const response = await fetch(createServerApiUrl('/api/auth/register'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -204,10 +205,10 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
 
                 {/* NEW: Terms and Conditions Checkbox */}
                 <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-                    <label style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        fontSize: '0.875rem', 
+                    <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        fontSize: '0.875rem',
                         color: '#4871ff',
                         cursor: 'pointer'
                     }}>
@@ -215,7 +216,7 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                             type="checkbox"
                             checked={agreeToTerms}
                             onChange={(e) => setAgreeToTerms(e.target.checked)}
-                            style={{ 
+                            style={{
                                 marginRight: '8px',
                                 width: '16px',
                                 height: '16px',
@@ -334,7 +335,7 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                                 ×
                             </button>
                         </div>
-                        
+
                         {/* Modal Content - Scrollable */}
                         <div style={{
                             padding: '20px',
@@ -344,17 +345,17 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                             lineHeight: '1.6'
                         }}>
                             <h2>Advisory Nature of Recommendations:</h2><p>
- <p>The academic program and major suggestions provided by this chatbot are recommendations only and are not guaranteed to be accurate or suitable for your individual circumstances. Final decisions remain your own responsibility.</p>
-<h2>Fairness and Continuous Improvement:</h2>
-<p>
- We strive to minimize bias in our system. Recommendations are generated from data tested with diverse student populations. Our team regularly reviews and audits the database and machine learning models to reduce unfairness or skewed outcomes. </p>
-<h2>Privacy and Data Protection:</h2>
- <p>We follow applicable student privacy standards, including FERPA guidelines. Personal information is anonymized wherever possible, and your data is stored securely with a clear retention policy. Your data will not be shared with unauthorized third parties.</p>
- <h2>Transparency:</h2>
- <p>You have the right to understand how recommendations are generated. This chatbot uses your provided data (such as personality traits or preferences) to match you with potential majors using transparent, explainable algorithms.</p>
-<h2>Consent to Use Data:</h2>
- <p>By proceeding, you consent to the collection and processing of your data for the purpose of generating academic suggestions. You may request deletion of your data at any time by contacting our support team.</p>
-</p>
+                                <p>The academic program and major suggestions provided by this chatbot are recommendations only and are not guaranteed to be accurate or suitable for your individual circumstances. Final decisions remain your own responsibility.</p>
+                                <h2>Fairness and Continuous Improvement:</h2>
+                                <p>
+                                    We strive to minimize bias in our system. Recommendations are generated from data tested with diverse student populations. Our team regularly reviews and audits the database and machine learning models to reduce unfairness or skewed outcomes. </p>
+                                <h2>Privacy and Data Protection:</h2>
+                                <p>We follow applicable student privacy standards, including FERPA guidelines. Personal information is anonymized wherever possible, and your data is stored securely with a clear retention policy. Your data will not be shared with unauthorized third parties.</p>
+                                <h2>Transparency:</h2>
+                                <p>You have the right to understand how recommendations are generated. This chatbot uses your provided data (such as personality traits or preferences) to match you with potential majors using transparent, explainable algorithms.</p>
+                                <h2>Consent to Use Data:</h2>
+                                <p>By proceeding, you consent to the collection and processing of your data for the purpose of generating academic suggestions. You may request deletion of your data at any time by contacting our support team.</p>
+                            </p>
                             {/* Terms and conditions content*/}
                         </div>
                     </div>

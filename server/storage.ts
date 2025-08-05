@@ -1,9 +1,8 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 import { users, chatSessions, messages, type User, type InsertUser, type ChatSession, type Message, type InsertChatSession, type InsertMessage } from "@shared/schema";
 
-// Database connection using existing pg package
 const pool = new Pool({
   connectionString: process.env.DATABASE_PUBLIC_URL!,
 });
@@ -13,10 +12,11 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  // 👈 REMOVED: getPersonalityTypes - not stored in database
   createChatSession(session: InsertChatSession): Promise<ChatSession>;
   getChatSessions(): Promise<ChatSession[]>;
-  getChatSessionsByUserId(userId: number): Promise<ChatSession[]>;
+  getChatSessionsByUserId(userId: number, limit?: number): Promise<ChatSession[]>;
+  getChatSessionsByUserIdPaginated(userId: number, limit: number, offset: number): Promise<ChatSession[]>;
+  getTotalSessionsByUserId(userId: number): Promise<number>;
   createMessage(message: InsertMessage): Promise<Message>;
   getMessagesBySessionId(sessionId: number): Promise<Message[]>;
   getRecentMessages(sessionId: number, limit: number): Promise<Message[]>;
@@ -24,8 +24,6 @@ export interface IStorage {
 }
 
 export class DbStorage implements IStorage {
-  // 👈 REMOVED: No personality types initialization needed
-
   async getUser(id: number): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0];
@@ -57,12 +55,32 @@ export class DbStorage implements IStorage {
     return await db.select().from(chatSessions).orderBy(desc(chatSessions.updatedAt));
   }
 
-  async getChatSessionsByUserId(userId: number): Promise<ChatSession[]> {
+  async getChatSessionsByUserId(userId: number, limit: number = 1000): Promise<ChatSession[]> {
     return await db
       .select()
       .from(chatSessions)
       .where(eq(chatSessions.userId, userId))
-      .orderBy(desc(chatSessions.updatedAt));
+      .orderBy(desc(chatSessions.updatedAt))
+      .limit(limit);
+  }
+
+  async getChatSessionsByUserIdPaginated(userId: number, limit: number, offset: number): Promise<ChatSession[]> {
+    return await db
+      .select()
+      .from(chatSessions)
+      .where(eq(chatSessions.userId, userId))
+      .orderBy(desc(chatSessions.updatedAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getTotalSessionsByUserId(userId: number): Promise<number> {
+    const result = await db
+      .select({ count: sql`count(*)` })
+      .from(chatSessions)
+      .where(eq(chatSessions.userId, userId));
+
+    return parseInt(result[0].count as string);
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
@@ -75,7 +93,7 @@ export class DbStorage implements IStorage {
       .select()
       .from(messages)
       .where(eq(messages.chatSessionId, sessionId))
-      .orderBy(messages.createdAt); // Chronological order
+      .orderBy(messages.createdAt);
   }
 
   async getRecentMessages(sessionId: number, limit: number): Promise<Message[]> {
@@ -85,7 +103,7 @@ export class DbStorage implements IStorage {
       .where(eq(messages.chatSessionId, sessionId))
       .orderBy(desc(messages.createdAt))
       .limit(limit)
-      .then(results => results.reverse()); // Reverse to get chronological order
+      .then(results => results.reverse());
   }
 
   async updateChatSessionTimestamp(sessionId: number): Promise<void> {

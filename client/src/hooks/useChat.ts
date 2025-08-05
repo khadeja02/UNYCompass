@@ -1,6 +1,5 @@
-// src/hooks/useChat.ts - FIXED VERSION
 import { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import type { ChatSession, Message } from '@shared/schema';
 
@@ -14,16 +13,48 @@ export const useChat = () => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const queryClient = useQueryClient();
 
-    // Fetch chat sessions
-    const { data: chatSessions = [] } = useQuery<ChatSession[]>({
+    const {
+        data: chatSessionsData,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isLoading: isLoadingSessions
+    } = useInfiniteQuery({
         queryKey: ["/api/chat-sessions"],
-        queryFn: async () => {
-            const response = await apiRequest("GET", "/api/chat-sessions");
-            return response.json();
+        queryFn: async ({ pageParam = 1 }) => {
+            const response = await apiRequest("GET", `/api/chat-sessions?page=${pageParam}&limit=10`);
+            const data = await response.json();
+
+            if (Array.isArray(data)) {
+                return {
+                    sessions: data,
+                    pagination: {
+                        currentPage: pageParam,
+                        hasMore: false,
+                        totalPages: 1,
+                        totalSessions: data.length
+                    }
+                };
+            } else {
+                return data;
+            }
         },
+        getNextPageParam: (lastPage) => {
+            if (!lastPage.pagination) {
+                return undefined;
+            }
+
+            const hasMore = lastPage.pagination.hasMore;
+            const nextPage = hasMore ? lastPage.pagination.currentPage + 1 : undefined;
+            return nextPage;
+        },
+        initialPageParam: 1,
     });
 
-    // Fetch messages for current session
+    const chatSessions = chatSessionsData?.pages.flatMap((page) => {
+        return page.sessions || page;
+    }) ?? [];
+
     const { data: sessionMessages = [] } = useQuery<Message[]>({
         queryKey: ["/api/messages", currentSessionId],
         queryFn: async () => {
@@ -34,65 +65,89 @@ export const useChat = () => {
         enabled: !!currentSessionId,
     });
 
-    // Create chat session mutation
     const createSessionMutation = useMutation({
         mutationFn: async (data: { personalityType?: string; title?: string }) => {
+            // ✅ Use apiRequest instead of direct fetch
             const response = await apiRequest("POST", "/api/chat-sessions", data);
             return response.json();
         },
         onSuccess: (session: ChatSession) => {
             setCurrentSessionId(session.id);
-            setMessages([]); // Clear messages for new session
+            setMessages([]);
             queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
 
-            // FIXED: Send pending message after session is created
             if (pendingMessage) {
-                sendMessageMutation.mutate(pendingMessage);
-                setPendingMessage(null);
+                setTimeout(() => {
+                    sendMessageMutation.mutate(pendingMessage);
+                    setPendingMessage(null);
+                }, 100);
             }
         },
+        onError: (error) => {
+            alert(`Session creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setPendingMessage(null);
+        }
     });
 
-    // Send message mutation
     const sendMessageMutation = useMutation({
         mutationFn: async (content: string) => {
-            if (!currentSessionId) throw new Error("No active session");
+            if (!currentSessionId) {
+                throw new Error("No active session");
+            }
+
+            // Add optimistic user message immediately
+            const tempUserMessage: Message = {
+                id: -Date.now(), // Use negative number for temp messages
+                chatSessionId: currentSessionId,
+                content: content,
+                isUser: true,
+                createdAt: new Date()
+            };
+
+            queryClient.setQueryData(
+                ["/api/messages", currentSessionId],
+                (oldMessages: Message[] = []) => [...oldMessages, tempUserMessage]
+            );
 
             const response = await apiRequest("POST", "/api/messages", {
                 chatSessionId: currentSessionId,
                 content,
                 isUser: true,
             });
+
+            if (!response.ok) {
+                // Remove temp message on error
+                queryClient.setQueryData(
+                    ["/api/messages", currentSessionId],
+                    (oldMessages: Message[] = []) => oldMessages.filter(msg => msg.id !== tempUserMessage.id)
+                );
+
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to send message');
+            }
+
             return response.json();
         },
         onSuccess: (data) => {
-            // Backend returns { userMessage, aiResponse }
-            if (data.userMessage && data.aiResponse) {
-                // For session-based chats, invalidate queries to refresh sessionMessages
-                if (currentSessionId) {
-                    queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
-                } else {
-                    // For local chats, update local state
-                    setMessages(prev => [...prev, data.userMessage, data.aiResponse]);
-                }
+            // The server returns both userMessage and aiResponse
+            // Replace the entire messages cache with fresh data from server
+            if (currentSessionId) {
+                queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
+                queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
             }
             setMessageInput("");
-
-            // Refresh session list to update timestamps
-            queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
         },
+        onError: (error) => {
+            alert('Failed to send message: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        }
     });
 
-    // Use sessionMessages directly instead of local state duplication
-    // This eliminates the need for the problematic useEffect
     const displayMessages = currentSessionId ? sessionMessages : messages;
 
-    // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [displayMessages]);
 
-    // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = "auto";
@@ -100,66 +155,73 @@ export const useChat = () => {
         }
     }, [messageInput]);
 
-    // FIXED: Handle send message without setTimeout
     const handleSendMessage = async (content?: string, personalityType?: string) => {
         const messageContent = content || messageInput.trim();
         if (!messageContent) return;
 
-        // If no active session, create one first and store the message
-        if (!currentSessionId) {
+        // Clear input immediately
+        setMessageInput("");
+
+        if (currentSessionId) {
+            // For existing sessions, send with optimistic update
+            sendMessageMutation.mutate(messageContent);
+        } else {
+            // For new sessions, add to local messages temporarily
+            const tempUserMessage: Message = {
+                id: Date.now(),
+                chatSessionId: 0,
+                content: messageContent,
+                isUser: true,
+                createdAt: new Date()
+            };
+
+            setMessages(prev => [...prev, tempUserMessage]);
+
             setPendingMessage(messageContent);
             createSessionMutation.mutate({
                 personalityType,
                 title: messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '')
             });
-        } else {
-            // Send to existing session immediately
-            sendMessageMutation.mutate(messageContent);
         }
     };
 
-    // Handle new chat
     const handleNewChat = () => {
         setCurrentSessionId(null);
         setMessageInput("");
-        setMessages([]); // Clear local messages for new chat
-        setPendingMessage(null); // Clear any pending message
+        setMessages([]);
+        setPendingMessage(null);
     };
 
-    // Handle chat selection (switch to existing chat)
     const handleChatSelect = (chatId: number) => {
-        if (chatId === currentSessionId) return; // Already selected
-
+        if (chatId === currentSessionId) return;
         setCurrentSessionId(chatId);
         setMessageInput("");
-        setPendingMessage(null); // Clear any pending message
-        // sessionMessages will be loaded automatically by the useQuery
+        setPendingMessage(null);
+    };
+
+    const handleLoadMoreSessions = () => {
+        if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+        }
     };
 
     const isLoading = sendMessageMutation.isPending || createSessionMutation.isPending;
 
     return {
-        // State
         currentSessionId,
         messageInput,
-        messages: displayMessages, // Use the computed displayMessages
-
-        // Refs
+        messages: displayMessages,
         textareaRef,
         messagesEndRef,
-
-        // Setters
         setMessageInput,
-
-        // Data
         chatSessions,
-
-        // Actions
         handleSendMessage,
         handleNewChat,
         handleChatSelect,
-
-        // Loading states
+        handleLoadMoreSessions,
+        hasMoreSessions: hasNextPage,
+        isLoadingMoreSessions: isFetchingNextPage,
+        isLoadingSessions,
         isLoading,
     };
 };

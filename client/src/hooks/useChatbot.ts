@@ -78,13 +78,12 @@ export const useChatbot = () => {
         },
     });
 
-    // Send chatbot message function
+    // ✅ Updated: Send chatbot message function with better state management
     const sendChatbotMessage = (
         content: string,
         setMessages: (updateFn: (prev: Message[]) => Message[]) => void
     ) => {
         console.log('🚀 sendChatbotMessage called with:', content);
-        console.log('🚀 setMessages type:', typeof setMessages);
 
         // Add user message immediately
         const userMessage: Message = {
@@ -96,14 +95,7 @@ export const useChatbot = () => {
         };
 
         console.log('👤 Adding user message:', userMessage);
-
-        // Test the setMessages function
-        setMessages(prev => {
-            console.log('📝 Previous messages:', prev);
-            const newMessages = [...prev, userMessage];
-            console.log('📝 New messages:', newMessages);
-            return newMessages;
-        });
+        setMessages(prev => [...prev, userMessage]);
 
         console.log('✅ User message added, now calling API...');
 
@@ -174,20 +166,25 @@ export const useChatbot = () => {
         console.log('Hunter AI mode activated successfully');
     };
 
-    // Handle suggestion click
+    // ✅ Updated: Handle suggestion click
     const handleSuggestionClick = (
         suggestion: string,
         setMessageInput: (input: string) => void,
         setMessages: (updateFn: (prev: Message[]) => Message[]) => void
     ) => {
+        // Set the input first
         setMessageInput(suggestion);
         // Auto-send the suggestion
         sendChatbotMessage(suggestion, setMessages);
+        // Clear the input after sending
+        setTimeout(() => setMessageInput(""), 100);
     };
+
     const resetChatbotState = () => {
         setShowChatbotSuggestions(false);
         // Don't reset chatbotStatus - we want to keep it loaded
     };
+
     // Get status badge data
     const getStatusBadge = () => {
         switch (chatbotStatus.status) {
@@ -237,7 +234,6 @@ export const useChatbot = () => {
 
         // Loading state
         isChatbotLoading: sendChatbotMutation.isPending,
-        // ... other returns
         resetChatbotState,
     };
 };

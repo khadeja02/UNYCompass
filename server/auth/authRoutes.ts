@@ -8,6 +8,9 @@ const router = Router();
 // Register new user - EXACT same as original
 router.post('/register', async (req: Request, res: Response) => {
     try {
+        console.error('🔍 REGISTER DEBUG - req.body:', req.body);
+        console.error('🔍 REGISTER DEBUG - content-type:', req.headers['content-type']);
+
         const { username, email, password } = req.body;
 
         const { user, token } = await AuthService.register(username, email, password);
@@ -40,13 +43,43 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 });
 
-// Login user - EXACT same as original
+// Login user - WITH DEBUGGING
 router.post('/login', async (req: Request, res: Response) => {
     try {
+        // EXTENSIVE DEBUG LOGGING
+        console.error('🔍 LOGIN DEBUG START ================================');
+        console.error('🔍 LOGIN DEBUG - req.body:', req.body);
+        console.error('🔍 LOGIN DEBUG - req.body type:', typeof req.body);
+        console.error('🔍 LOGIN DEBUG - req.body keys:', Object.keys(req.body || {}));
+        console.error('🔍 LOGIN DEBUG - req.headers:', req.headers);
+        console.error('🔍 LOGIN DEBUG - content-type:', req.headers['content-type']);
+        console.error('🔍 LOGIN DEBUG - req.method:', req.method);
+        console.error('🔍 LOGIN DEBUG - req.path:', req.path);
+        console.error('🔍 LOGIN DEBUG - req.url:', req.url);
+        console.error('🔍 LOGIN DEBUG - JSON.stringify(req.body):', JSON.stringify(req.body));
+        console.error('🔍 LOGIN DEBUG END ==================================');
+
+        // Check if body exists
+        if (!req.body || typeof req.body !== 'object') {
+            console.error('❌ LOGIN ERROR - req.body is not an object:', req.body);
+            return res.status(400).json({ error: 'Invalid request body' });
+        }
+
+        // Check if required fields exist
         const { username, password } = req.body;
 
+        console.error('🔍 LOGIN DEBUG - Extracted username:', username);
+        console.error('🔍 LOGIN DEBUG - Extracted password:', password ? '[HIDDEN]' : 'undefined');
+
+        if (!username || !password) {
+            console.error('❌ LOGIN ERROR - Missing username or password');
+            return res.status(400).json({ error: 'Username and password are required' });
+        }
+
+        console.error('✅ LOGIN DEBUG - Calling AuthService.login...');
         const { user, token } = await AuthService.login(username, password);
 
+        console.error('✅ LOGIN DEBUG - AuthService.login successful');
         res.json({
             message: 'Login successful',
             user: {
@@ -58,7 +91,8 @@ router.post('/login', async (req: Request, res: Response) => {
         });
 
     } catch (err: any) {
-        console.error('Login error:', err);
+        console.error('❌ Login error:', err);
+        console.error('❌ Login error stack:', err.stack);
 
         if (err.message === 'Username and password are required') {
             return res.status(400).json({ error: err.message });
@@ -69,6 +103,20 @@ router.post('/login', async (req: Request, res: Response) => {
 
         res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+// Add a test endpoint to verify body parsing
+router.post('/test', (req: Request, res: Response) => {
+    console.error('🧪 TEST ENDPOINT - req.body:', req.body);
+    console.error('🧪 TEST ENDPOINT - content-type:', req.headers['content-type']);
+    console.error('🧪 TEST ENDPOINT - headers:', req.headers);
+
+    res.json({
+        message: 'Test endpoint reached',
+        body: req.body,
+        headers: req.headers,
+        contentType: req.headers['content-type']
+    });
 });
 
 // Get user profile - EXACT same as original
