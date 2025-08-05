@@ -98,18 +98,22 @@ class UNYCompassDatabase:
                     print(f"Found new/updated file: {file_path.name}")
         
         if files_to_process:
-            # FIXED: Safe delete operation - only delete if namespace exists
-            try:
-                stats = self.index.describe_index_stats()
-                if stats.total_vector_count > 0:
-                    print("Clearing existing data from index...")
-                    self.index.delete(delete_all=True, namespace=self.namespace)
-                    time.sleep(5)  # Wait for deletion to complete
-                else:
-                    print("Index is empty, proceeding with fresh indexing...")
-            except Exception as e:
-                # If namespace doesn't exist or other error, just proceed
-                print(f"Note: {str(e)} - proceeding with fresh indexing...")
+            clear_index = os.getenv("CLEAR_PINECONE_INDEX", "false").lower() == "true"
+
+            if clear_index:
+                try:
+                    stats = self.index.describe_index_stats()
+                    if stats.total_vector_count > 0:
+                        print("CLEAR_PINECONE_INDEX=true → Deleting existing data from Pinecone index...")
+                        self.index.delete(delete_all=True, namespace=self.namespace)
+                        time.sleep(5)
+                    else:
+                        print("Index is empty, proceeding with fresh indexing...")
+                except Exception as e:
+                    print(f"Warning during index clearing: {e}")
+            else:
+                print("Skipping index deletion (set CLEAR_PINECONE_INDEX=true to enable).")
+
             
             # Process all new/updated files
             for file_path, file_hash in files_to_process:
