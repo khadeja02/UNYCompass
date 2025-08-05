@@ -1,0 +1,16 @@
+2025-08-05 02:20:52,201 - INFO - HYBRID: Added 185 URLs across 4 tiers
+2025-08-05 02:20:52,201 - INFO -   Tier 1 (Verified): 35
+2025-08-05 02:20:52,202 - INFO -   Tier 2 (Department pages): 133
+2025-08-05 02:20:52,202 - INFO -   Tier 3 (Specialized): 8
+2025-08-05 02:20:52,202 - INFO -   Tier 4 (Discovery): 9
+2025-08-05 02:20:52,202 - INFO - 🚀 Starting HYBRID crawl of https://hunter.cuny.edu
+2025-08-05 02:20:52,202 - INFO - 📊 Target: 200 pages with 3 workers
+2025-08-05 02:20:52,202 - INFO - 🎯 HYBRID approach: Maximum coverage + Enhanced quality
+2025-08-05 10:37:13,490 - INFO - HYBRID: Added 185 URLs across 4 tiers
+2025-08-05 10:37:13,490 - INFO -   Tier 1 (Verified): 35
+2025-08-05 10:37:13,491 - INFO -   Tier 2 (Department pages): 133
+2025-08-05 10:37:13,491 - INFO -   Tier 3 (Specialized): 8
+2025-08-05 10:37:13,491 - INFO -   Tier 4 (Discovery): 9
+2025-08-05 10:37:13,491 - INFO - 🚀 Starting HYBRID crawl of https://hunter.cuny.edu
+2025-08-05 10:37:13,492 - INFO - 📊 Target: 200 pages with 3 workers
+2025-08-05 10:37:13,492 - INFO - 🎯 HYBRID approach: Maximum coverage + Enhanced quality

@@ -1,57 +1,135 @@
 import os
+import json
+import hashlib
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from langchain_openai import ChatOpenAI  
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 import re
 from pinecone import Pinecone, ServerlessSpec
-import hashlib
 import time
 from pathlib import Path
-import requests
+from typing import List, Dict, Optional
 
-# Load environment variables - fix the paths
+# Load environment variables - same paths as original
 current_dir = Path(__file__).parent
 load_dotenv(dotenv_path=current_dir / "../api/hunter_api-key.env")
 load_dotenv(dotenv_path=current_dir / "../api/pinecone_api-key.env")
 
 class UNYCompassDatabase:
-    def __init__(self, index_name="uny-compass-index"):
+    def __init__(self, index_name="uny-compass-intermediate"):
         self.index_name = index_name
-        self.namespace = "hunter-default"
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.namespace = "hunter-intermediate"
+        
+        # INTERMEDIATE: Better embedding model (768 dimensions vs 384)
+        self.model = SentenceTransformer('all-mpnet-base-v2')
+        
+        # INTERMEDIATE: Smart text splitter for better chunking
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=800,           # Larger chunks for better context
+            chunk_overlap=100,        # Overlap to maintain context between chunks
+            separators=["\n\n--- PAGE:", "\n\n", "\n", ". ", " ", ""],  # Smart splitting priorities
+            length_function=len
+        )
 
         # Connect to Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
-        # Create index if needed
+        # Create index with new dimensions for better model
         if index_name not in [idx.name for idx in pc.list_indexes()]:
-            print(f"Creating index '{index_name}'...")
+            print(f"Creating intermediate RAG index '{index_name}'...")
             pc.create_index(
                 name=index_name,
-                dimension=384,
+                dimension=768,  # Changed from 384 to 768 for better model
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
             time.sleep(10)
         else:
-            print(f"Using existing index '{index_name}'...")
+            print(f"Using existing intermediate index '{index_name}'...")
 
-        # Assign index
         self.index = pc.Index(index_name)
+        
+        # INTERMEDIATE: Track indexed files to handle updates
+        self.indexed_files_record = current_dir / "indexed_files.json"
+        self.indexed_files = self.load_indexed_files()
 
-        # Check if we need to upload data
-        stats = self.index.describe_index_stats()
-        if stats.total_vector_count == 0:
-            # Look for hunter_content.txt in the docs directory
-            content_file = current_dir / "../docs/hunter_content.txt"
-            if content_file.exists():
-                self.upload_text_file(str(content_file))
-            else:
-                print(f"Warning: {content_file} not found. Please run the web crawler first.")
+        # INTERMEDIATE: Check and update data intelligently
+        self.check_and_update_data()
 
-    def upload_text_file(self, file_path):
-        """Upload text file to Pinecone"""
+    def load_indexed_files(self) -> Dict[str, str]:
+        """Load record of what files have been indexed with their hashes"""
+        if self.indexed_files_record.exists():
+            with open(self.indexed_files_record, 'r') as f:
+                return json.load(f)
+        return {}
+
+    def save_indexed_files(self):
+        """Save record of indexed files"""
+        with open(self.indexed_files_record, 'w') as f:
+            json.dump(self.indexed_files, f, indent=2)
+
+    def get_file_hash(self, file_path: Path) -> str:
+        """Get hash of file to detect changes"""
+        with open(file_path, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
+
+    def check_and_update_data(self):
+        """INTERMEDIATE: Check for new or updated Hunter files (txt + json) and index them"""
+        docs_dir = current_dir / "../docs"
+        
+        # STREAMLINED: Only look for your specific hybrid files
+        possible_files = [
+            docs_dir / "hunter_hybrid.txt",              # Your main hybrid content
+            docs_dir / "hunter_hybrid_urls.json",        # Your hybrid URL mappings  
+            docs_dir / "hunter_hybrid_analytics.json"    # Your hybrid analytics
+        ]
+        
+        files_to_process = []
+        
+        for file_path in possible_files:
+            if file_path.exists():
+                current_hash = self.get_file_hash(file_path)
+                stored_hash = self.indexed_files.get(str(file_path))
+                
+                if current_hash != stored_hash:
+                    files_to_process.append((file_path, current_hash))
+                    print(f"Found new/updated file: {file_path.name}")
+        
+        if files_to_process:
+            # FIXED: Safe delete operation - only delete if namespace exists
+            try:
+                stats = self.index.describe_index_stats()
+                if stats.total_vector_count > 0:
+                    print("Clearing existing data from index...")
+                    self.index.delete(delete_all=True, namespace=self.namespace)
+                    time.sleep(5)  # Wait for deletion to complete
+                else:
+                    print("Index is empty, proceeding with fresh indexing...")
+            except Exception as e:
+                # If namespace doesn't exist or other error, just proceed
+                print(f"Note: {str(e)} - proceeding with fresh indexing...")
+            
+            # Process all new/updated files
+            for file_path, file_hash in files_to_process:
+                if file_path.suffix == '.json':
+                    self.upload_json_file(str(file_path), file_hash)
+                else:
+                    self.upload_text_file(str(file_path), file_hash)
+        else:
+            # Check if index is empty and we have files to process
+            try:
+                stats = self.index.describe_index_stats()
+                if stats.total_vector_count == 0:
+                    print("No data found in index and no files to process.")
+                    print("Please ensure you have hunter_hybrid files in the docs directory.")
+            except Exception as e:
+                print(f"Could not check index stats: {e}")
+                print("Proceeding anyway...")
+
+    def upload_text_file(self, file_path: str, file_hash: str = None):
+        """INTERMEDIATE: Enhanced upload with better chunking and metadata"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 text = f.read()
@@ -59,53 +137,434 @@ class UNYCompassDatabase:
             print(f"Error: File {file_path} not found")
             return
         
-        # Simple chunking
-        chunk_size = 500
-        chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size) if text[i:i+chunk_size].strip()]
-        
-        if not chunks:
+        if not text.strip():
             print("No content to upload")
             return
-        
-        # Create vectors and upload
-        vectors = []
-        for i, chunk in enumerate(chunks):
-            embedding = self.model.encode([chunk])[0]
-            vectors.append({
-                'id': f'chunk_{i}',
-                'values': embedding.tolist(),
-                'metadata': {'text': chunk[:1000]}
-            })
-            
-            # Upload in batches of 100
-            if len(vectors) == 100:
-                self.index.upsert(vectors=vectors)
-                vectors = []
-        
-        # Upload remaining
-        if vectors:
-            self.index.upsert(vectors=vectors)
-        
-        print(f"Upload complete: {len(chunks)} chunks")
 
-    def search(self, query, top_k=5):
-        """Search Pinecone for relevant chunks"""
-        query_vector = self.model.encode([query])[0]
-        results = self.index.query(
-            vector=query_vector.tolist(),
-            top_k=top_k,
-            include_metadata=True
-        )
+        print(f"Processing {Path(file_path).name} with intermediate RAG...")
         
-        return [match['metadata']['text'] for match in results['matches'] if match['score'] > 0.2]
+        # INTERMEDIATE: Parse page structure if it exists (preserves your crawl structure)
+        chunks_with_metadata = []
+        
+        if "--- PAGE:" in text:
+            # Split by pages first to preserve page boundaries
+            pages = text.split("--- PAGE:")
+            
+            for i, page in enumerate(pages[1:], 1):  # Skip first empty part
+                lines = page.strip().split('\n', 1)  # Split on first newline only
+                
+                if len(lines) >= 2:
+                    url_line = lines[0].strip().replace('---', '').strip()
+                    page_content = lines[1].strip()
+                    
+                    if page_content:
+                        # INTERMEDIATE: Extract rich metadata from URL and content
+                        metadata = self.extract_metadata(url_line, page_content)
+                        
+                        # Use smart text splitter on each page
+                        page_chunks = self.text_splitter.split_text(page_content)
+                        
+                        for j, chunk in enumerate(page_chunks):
+                            if chunk.strip():
+                                chunk_metadata = metadata.copy()
+                                chunk_metadata.update({
+                                    'chunk_id': f"page_{i}_chunk_{j}",
+                                    'page_number': i,
+                                    'chunk_number': j,
+                                    'source_file': Path(file_path).name
+                                })
+                                
+                                chunks_with_metadata.append((chunk, chunk_metadata))
+        else:
+            # Single document - split normally
+            chunks = self.text_splitter.split_text(text)
+            for i, chunk in enumerate(chunks):
+                if chunk.strip():
+                    metadata = {
+                        'chunk_id': f"doc_chunk_{i}",
+                        'chunk_number': i,
+                        'source_file': Path(file_path).name,
+                        'content_type': 'general'
+                    }
+                    chunks_with_metadata.append((chunk, metadata))
+        
+        if not chunks_with_metadata:
+            print("No chunks created")
+            return
+        
+        # INTERMEDIATE: Create embeddings with better model and upload in batches
+        vectors = []
+        for i, (chunk, metadata) in enumerate(chunks_with_metadata):
+            try:
+                embedding = self.model.encode([chunk])[0]
+                
+                # INTERMEDIATE: Store more text in metadata
+                metadata['text'] = chunk[:8000]  # Store more text than original
+                metadata['text_length'] = len(chunk)
+                
+                vectors.append({
+                    'id': f'{Path(file_path).stem}_{i}',
+                    'values': embedding.tolist(),
+                    'metadata': metadata
+                })
+                
+                # Upload in smaller batches for stability
+                if len(vectors) == 50:
+                    self.index.upsert(vectors=vectors, namespace=self.namespace)
+                    vectors = []
+                    print(f"Uploaded batch, processed {i+1} chunks...")
+                    
+            except Exception as e:
+                print(f"Error processing chunk {i}: {e}")
+                continue
+        
+        # Upload remaining vectors
+        if vectors:
+            self.index.upsert(vectors=vectors, namespace=self.namespace)
+        
+        # Record this file as indexed with its hash
+        if file_hash:
+            self.indexed_files[file_path] = file_hash
+            self.save_indexed_files()
+        
+        print(f"Upload complete: {len(chunks_with_metadata)} chunks from {Path(file_path).name}")
+
+    def upload_json_file(self, file_path: str, file_hash: str = None):
+        """ENHANCED: Process JSON files with structured Hunter data"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error reading JSON file {file_path}: {e}")
+            return
+        
+        print(f"Processing JSON file: {Path(file_path).name}")
+        
+        chunks_with_metadata = []
+        
+        # Process URL mapping files (hunter_hybrid_urls.json, etc.)
+        if 'schools' in data and 'departments' in data:
+            print("Processing URL mapping file...")
+            
+            # Process schools
+            for school_name, school_url in data.get('schools', {}).items():
+                content = f"School: {school_name}\nURL: {school_url}\nType: Academic School"
+                metadata = {
+                    'content_type': 'school_info',
+                    'school': school_name,
+                    'url': school_url,
+                    'data_type': 'url_mapping',
+                    'source_file': Path(file_path).name
+                }
+                chunks_with_metadata.append((content, metadata))
+            
+            # Process departments  
+            for dept_name, dept_url in data.get('departments', {}).items():
+                content = f"Department: {dept_name}\nURL: {dept_url}\nType: Academic Department"
+                metadata = {
+                    'content_type': 'department_info',
+                    'department': dept_name,
+                    'url': dept_url,
+                    'data_type': 'url_mapping',
+                    'source_file': Path(file_path).name
+                }
+                chunks_with_metadata.append((content, metadata))
+            
+            # Process programs
+            for program_name, program_url in data.get('programs', {}).items():
+                content = f"Program: {program_name}\nURL: {program_url}\nType: Academic Program"
+                metadata = {
+                    'content_type': 'program_info',
+                    'program': program_name,
+                    'url': program_url,
+                    'data_type': 'url_mapping',
+                    'source_file': Path(file_path).name
+                }
+                chunks_with_metadata.append((content, metadata))
+        
+        # Process analytics files (hunter_hybrid_analytics.json, etc.)
+        elif 'pages_data' in data:
+            print("Processing analytics file...")
+            
+            for page_data in data.get('pages_data', []):
+                # Create rich content from page metadata
+                content_parts = []
+                
+                if page_data.get('title'):
+                    content_parts.append(f"Page Title: {page_data['title']}")
+                
+                if page_data.get('url'):
+                    content_parts.append(f"URL: {page_data['url']}")
+                
+                if page_data.get('programs'):
+                    programs_text = ', '.join(page_data['programs'])
+                    content_parts.append(f"Programs: {programs_text}")
+                
+                if page_data.get('degrees'):
+                    degrees_text = ', '.join(page_data['degrees'])
+                    content_parts.append(f"Degrees: {degrees_text}")
+                
+                if page_data.get('departments'):
+                    depts_text = ', '.join(page_data['departments'])
+                    content_parts.append(f"Departments: {depts_text}")
+                
+                if page_data.get('schools'):
+                    schools_text = ', '.join(page_data['schools'])
+                    content_parts.append(f"Schools: {schools_text}")
+                
+                if page_data.get('categories'):
+                    categories_text = ', '.join(page_data['categories'])
+                    content_parts.append(f"Categories: {categories_text}")
+                
+                content = '\n'.join(content_parts)
+                
+                if content.strip():
+                    metadata = {
+                        'content_type': 'page_metadata',
+                        'url': page_data.get('url', ''),
+                        'title': page_data.get('title', ''),
+                        'data_type': 'analytics',
+                        'source_file': Path(file_path).name
+                    }
+                    
+                    # Add structured data to metadata
+                    if page_data.get('programs'):
+                        metadata['programs_mentioned'] = page_data['programs']
+                    if page_data.get('degrees'):
+                        metadata['degrees_mentioned'] = page_data['degrees']
+                    if page_data.get('departments'):
+                        metadata['departments_mentioned'] = page_data['departments']
+                    
+                    chunks_with_metadata.append((content, metadata))
+        
+        # Process crawl metadata
+        elif 'crawl_metadata' in data:
+            print("Processing crawl metadata...")
+            
+            crawl_info = data.get('crawl_metadata', {})
+            findings = data.get('findings', {})
+            
+            content_parts = [
+                f"Crawl Information:",
+                f"Total pages crawled: {crawl_info.get('total_pages_crawled', 'Unknown')}",
+                f"Content length: {crawl_info.get('total_content_length', 'Unknown')} characters",
+                f"Schools discovered: {findings.get('schools_discovered', 'Unknown')}",
+                f"Departments discovered: {findings.get('departments_discovered', 'Unknown')}",
+                f"Programs discovered: {findings.get('programs_discovered', 'Unknown')}"
+            ]
+            
+            content = '\n'.join(content_parts)
+            metadata = {
+                'content_type': 'crawl_metadata',
+                'data_type': 'system_info',
+                'source_file': Path(file_path).name
+            }
+            
+            chunks_with_metadata.append((content, metadata))
+        
+        if not chunks_with_metadata:
+            print(f"No processable data found in {Path(file_path).name}")
+            return
+        
+        # Create embeddings and upload
+        vectors = []
+        for i, (chunk, metadata) in enumerate(chunks_with_metadata):
+            try:
+                embedding = self.model.encode([chunk])[0]
+                
+                # Store the content and metadata
+                metadata['text'] = chunk[:8000]  # Store content in metadata
+                metadata['text_length'] = len(chunk)
+                
+                vectors.append({
+                    'id': f'{Path(file_path).stem}_json_{i}',
+                    'values': embedding.tolist(),
+                    'metadata': metadata
+                })
+                
+                # Upload in batches
+                if len(vectors) == 50:
+                    self.index.upsert(vectors=vectors, namespace=self.namespace)
+                    vectors = []
+                    print(f"Uploaded JSON batch, processed {i+1} items...")
+                    
+            except Exception as e:
+                print(f"Error processing JSON chunk {i}: {e}")
+                continue
+        
+        # Upload remaining vectors
+        if vectors:
+            self.index.upsert(vectors=vectors, namespace=self.namespace)
+        
+        # Record this file as processed
+        if file_hash:
+            self.indexed_files[file_path] = file_hash
+            self.save_indexed_files()
+        
+        print(f"JSON upload complete: {len(chunks_with_metadata)} items from {Path(file_path).name}")
+
+    def extract_metadata(self, url: str, content: str) -> Dict:
+        """INTERMEDIATE: Extract rich metadata for better filtering and search"""
+        metadata = {
+            'url': url if url.startswith('http') else '',
+            'content_type': 'unknown'
+        }
+        
+        # Extract school information from URL
+        if '/artsci/' in url:
+            metadata['school'] = 'Arts and Sciences'
+            
+            # Extract specific department from URL patterns
+            dept_patterns = {
+                'biological-sciences': 'Biology',
+                'computer-science': 'Computer Science',
+                'chemistry': 'Chemistry',
+                'psychology': 'Psychology',
+                'economics': 'Economics',
+                'sociology': 'Sociology',
+                'anthropology': 'Anthropology',
+                'english': 'English',
+                'history': 'History',
+                'philosophy': 'Philosophy',
+                'political-science': 'Political Science',
+                'mathematics-statistics': 'Mathematics',
+                'physics-astronomy': 'Physics',
+                'art-art-history': 'Art',
+                'music': 'Music',
+                'theatre': 'Theatre',
+                'dance': 'Dance'
+            }
+            
+            for pattern, dept in dept_patterns.items():
+                if pattern in url:
+                    metadata['department'] = dept
+                    break
+                    
+        elif 'school-of-education' in url:
+            metadata['school'] = 'Education'
+        elif 'school-of-health-professions' in url:
+            metadata['school'] = 'Health Professions'
+        elif 'nursing' in url:
+            metadata['school'] = 'Nursing'
+        elif 'social-work' in url:
+            metadata['school'] = 'Social Work'
+        
+        # Extract program level from URL and content
+        if any(term in url for term in ['undergraduate', 'bachelor', 'ba-', 'bs-']):
+            metadata['level'] = 'undergraduate'
+        elif any(term in url for term in ['graduate', 'master', 'ma-', 'ms-', 'phd', 'doctoral']):
+            metadata['level'] = 'graduate'
+        
+        # Extract content type from URL
+        if 'admission' in url:
+            metadata['content_type'] = 'admissions'
+        elif any(term in url for term in ['faculty', 'staff']):
+            metadata['content_type'] = 'faculty'
+        elif 'course' in url:
+            metadata['content_type'] = 'courses'
+        elif 'research' in url:
+            metadata['content_type'] = 'research'
+        elif any(term in url for term in ['undergraduate', 'graduate', 'program']):
+            metadata['content_type'] = 'program_info'
+        
+        # INTERMEDIATE: Extract degree mentions from content
+        degree_patterns = ['BA', 'BS', 'MA', 'MS', 'PhD', 'MFA', 'MSW', 'MPH', 'DNP', 'DPT']
+        found_degrees = [degree for degree in degree_patterns if degree in content]
+        if found_degrees:
+            metadata['degrees_mentioned'] = found_degrees
+        
+        return metadata
+
+    def expand_query(self, query: str) -> List[str]:
+        """INTERMEDIATE: Expand query with synonyms and related terms"""
+        query_lower = query.lower()
+        expanded_queries = [query]  # Always include original
+        
+        # Academic synonyms that improve search
+        subject_synonyms = {
+            'major': ['program', 'degree', 'field of study', 'concentration'],
+            'program': ['major', 'degree', 'field', 'concentration'],
+            'course': ['class', 'subject', 'curriculum'],
+            'requirement': ['prerequisite', 'needed', 'required', 'must take'],
+            'biology': ['biological sciences', 'life sciences', 'bio'],
+            'computer science': ['cs', 'computing', 'programming'],
+            'psychology': ['psych', 'behavioral science'],
+            'mathematics': ['math', 'statistics', 'calculus'],
+            'economics': ['econ', 'economic'],
+            'chemistry': ['chem', 'chemical'],
+            'english': ['literature', 'writing'],
+            'history': ['historical'],
+            'sociology': ['social'],
+            'anthropology': ['cultural']
+        }
+        
+        # Add synonyms to expand search
+        for term, synonyms in subject_synonyms.items():
+            if term in query_lower:
+                for synonym in synonyms[:2]:  # Limit to prevent too many searches
+                    expanded_queries.append(query_lower.replace(term, synonym))
+        
+        return expanded_queries[:3]  # Limit total queries
+
+    def search(self, query: str, top_k: int = 8) -> List[str]:
+        """INTERMEDIATE: Enhanced search with query expansion and deduplication"""
+        
+        # INTERMEDIATE: Expand query for better results
+        expanded_queries = self.expand_query(query)
+        all_results = []
+        
+        for expanded_query in expanded_queries:
+            try:
+                query_vector = self.model.encode([expanded_query])[0]
+                
+                results = self.index.query(
+                    vector=query_vector.tolist(),
+                    top_k=top_k,
+                    include_metadata=True,
+                    namespace=self.namespace
+                )
+                
+                # Collect results with scores
+                for match in results['matches']:
+                    if match['score'] > 0.3:  # Higher threshold for better quality
+                        all_results.append({
+                            'text': match['metadata']['text'],
+                            'score': match['score'],
+                            'metadata': match['metadata']
+                        })
+                        
+            except Exception as e:
+                print(f"Search error for query '{expanded_query}': {e}")
+                continue
+        
+        # INTERMEDIATE: Remove duplicates and sort by score
+        seen_texts = set()
+        unique_results = []
+        
+        for result in sorted(all_results, key=lambda x: x['score'], reverse=True):
+            text_hash = hashlib.md5(result['text'].encode()).hexdigest()
+            if text_hash not in seen_texts:
+                seen_texts.add(text_hash)
+                unique_results.append(result['text'])
+        
+        return unique_results[:top_k]
 
 class ConversationMemory:
-    """Simple conversation memory to track context"""
+    """INTERMEDIATE: Enhanced conversation memory with your original smart context tracking"""
     def __init__(self):
         self.user_interests = {}
         self.mentioned_programs = set()
         self.conversation_history = []
         self.user_frustrations = []
+        
+        # INTERMEDIATE: Enhanced context tracking
+        self.user_context = {
+            'current_school': None,
+            'current_department': None,
+            'current_level': None,
+            'interests': [],
+            'interaction_pattern': 'initial'  # initial, exploring, focused, frustrated
+        }
     
     def add_exchange(self, question, response):
         self.conversation_history.append({
@@ -113,9 +572,65 @@ class ConversationMemory:
             'response': response,
             'timestamp': time.time()
         })
-        # Keep only last 5 exchanges
+        
+        # INTERMEDIATE: Extract enhanced context
+        self.extract_enhanced_context(question, response)
+        
+        # Keep only last 5 exchanges like original
         if len(self.conversation_history) > 5:
             self.conversation_history.pop(0)
+    
+    def extract_enhanced_context(self, question: str, response: str):
+        """INTERMEDIATE: Extract context clues from conversation"""
+        question_lower = question.lower()
+        
+        # Extract school mentions with more patterns
+        school_patterns = {
+            'Arts and Sciences': ['artsci', 'liberal arts', 'sciences', 'arts and sciences'],
+            'Education': ['teaching', 'education', 'educator', 'school of education'],
+            'Health Professions': ['health', 'therapy', 'nutrition', 'health professions'],
+            'Nursing': ['nurse', 'nursing', 'healthcare', 'bellevue'],
+            'Social Work': ['social work', 'social worker', 'silberman']
+        }
+        
+        for school, patterns in school_patterns.items():
+            if any(pattern in question_lower for pattern in patterns):
+                self.user_context['current_school'] = school
+        
+        # Extract department mentions with comprehensive patterns  
+        dept_patterns = {
+            'Biology': ['biology', 'bio', 'life sciences', 'biological'],
+            'Chemistry': ['chemistry', 'chem', 'chemical'],
+            'Psychology': ['psychology', 'psych', 'behavioral'],
+            'Computer Science': ['computer science', 'cs', 'programming', 'coding', 'computing'],
+            'English': ['english', 'literature', 'writing'],
+            'Economics': ['economics', 'econ', 'business'],
+            'Mathematics': ['math', 'mathematics', 'statistics', 'calculus'],
+            'Physics': ['physics', 'physical'],
+            'History': ['history', 'historical'],
+            'Sociology': ['sociology', 'social'],
+            'Anthropology': ['anthropology', 'cultural'],
+            'Philosophy': ['philosophy', 'philosophical']
+        }
+        
+        for dept, patterns in dept_patterns.items():
+            if any(pattern in question_lower for pattern in patterns):
+                self.user_context['current_department'] = dept
+        
+        # Extract level mentions
+        if any(term in question_lower for term in ['undergraduate', 'bachelor', 'ba', 'bs']):
+            self.user_context['current_level'] = 'undergraduate'
+        elif any(term in question_lower for term in ['graduate', 'master', 'ma', 'ms', 'phd', 'doctoral']):
+            self.user_context['current_level'] = 'graduate'
+        
+        # Detect interaction pattern
+        frustration_keywords = ['didn\'t ask', 'you assumed', 'why did you', 'without asking']
+        if any(keyword in question_lower for keyword in frustration_keywords):
+            self.user_context['interaction_pattern'] = 'frustrated'
+        elif any(keyword in question_lower for keyword in ['help picking', 'not sure', 'undecided']):
+            self.user_context['interaction_pattern'] = 'exploring'
+        elif self.user_context['current_department']:
+            self.user_context['interaction_pattern'] = 'focused'
     
     def add_user_interest(self, category, value):
         if category not in self.user_interests:
@@ -130,6 +645,15 @@ class ConversationMemory:
         for exchange in self.conversation_history[-2:]:
             context += f"Student: {exchange['question'][:80]}...\n"
             context += f"You: {exchange['response'][:100]}...\n\n"
+        
+        # Add enhanced context information
+        if self.user_context['current_department']:
+            context += f"Student is interested in: {self.user_context['current_department']}\n"
+        if self.user_context['current_level']:
+            context += f"Student is looking at: {self.user_context['current_level']} programs\n"
+        if self.user_context['interaction_pattern'] == 'frustrated':
+            context += "Student seemed frustrated in recent exchange\n"
+        
         return context
 
 class UNYCompassBot:
@@ -139,7 +663,7 @@ class UNYCompassBot:
         self.memory = ConversationMemory()
     
     def detect_question_type(self, question):
-        """Categorize what the user is asking about"""
+        """YOUR ORIGINAL excellent question categorization - UNCHANGED"""
         question_lower = question.lower()
         
         # Broad exploration questions
@@ -163,7 +687,7 @@ class UNYCompassBot:
         return 'general'
     
     def handle_exploration_question(self, question, context):
-        """Handle broad 'help me pick a major' type questions"""
+        """YOUR ORIGINAL excellent exploration handling - UNCHANGED"""
         prompt = f"""You are a helpful Hunter College academic advisor talking to a student who needs help choosing a major.
 
 {context}
@@ -184,7 +708,7 @@ Respond like a real advisor would - ask questions first, suggest programs later.
         return self.llm.invoke(prompt).content
     
     def handle_frustration(self, question, context):
-        """Handle when user is frustrated with previous responses"""
+        """YOUR ORIGINAL excellent frustration handling - UNCHANGED"""
         prompt = f"""The student is frustrated with your previous responses. They feel you made assumptions or didn't listen to them properly.
 
 Previous conversation: {self.memory.get_conversation_context()}
@@ -205,7 +729,7 @@ Respond with empathy and start fresh."""
         return self.llm.invoke(prompt).content
     
     def handle_specific_program(self, question, context):
-        """Handle questions about specific programs"""
+        """YOUR ORIGINAL excellent specific program handling - UNCHANGED"""
         prompt = f"""The student is asking about a specific program or field at Hunter College.
 
 Context from Hunter: {context}
@@ -219,15 +743,15 @@ Be helpful and informative about the specific program they're interested in."""
         return self.llm.invoke(prompt).content
     
     def answer_question(self, question):
-        """Main method to answer student questions"""
-        # Get relevant context from database
-        chunks = self.vector_db.search(question)
+        """COMBINED: Your original smart prompting + intermediate RAG retrieval"""
+        # INTERMEDIATE: Enhanced search with better retrieval
+        chunks = self.vector_db.search(question, top_k=6)
         context = "\n\n".join(chunks) if chunks else "Limited information available."
         
-        # Detect what type of question this is
+        # YOUR ORIGINAL: Detect what type of question this is
         question_type = self.detect_question_type(question)
         
-        # Route to appropriate handler
+        # YOUR ORIGINAL: Route to appropriate handler
         if question_type == 'exploration':
             response = self.handle_exploration_question(question, context)
         elif question_type == 'frustration':
@@ -235,7 +759,7 @@ Be helpful and informative about the specific program they're interested in."""
         elif question_type == 'specific_program':
             response = self.handle_specific_program(question, context)
         else:
-            # General response
+            # General response with your original approach
             conversation_context = self.memory.get_conversation_context()
             prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
 
@@ -264,7 +788,8 @@ def main():
     db = UNYCompassDatabase()
     bot = UNYCompassBot(db)
     
-    print("Hunter College Advisor Ready! (Type 'quit' to exit)")
+    print("Hunter College Intermediate RAG + Smart Conversational AI Ready! (Type 'quit' to exit)")
+    print("Features: Advanced RAG + Your Smart Prompting + Enhanced Memory + Frustration Handling")
     
     while True:
         try:
