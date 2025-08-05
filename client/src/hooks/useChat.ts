@@ -67,25 +67,8 @@ export const useChat = () => {
 
     const createSessionMutation = useMutation({
         mutationFn: async (data: { personalityType?: string; title?: string }) => {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                throw new Error('No authentication token found');
-            }
-
-            const response = await fetch('/api/chat-sessions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
-            }
-
+            // ✅ Use apiRequest instead of direct fetch
+            const response = await apiRequest("POST", "/api/chat-sessions", data);
             return response.json();
         },
         onSuccess: (session: ChatSession) => {
