@@ -76,14 +76,50 @@ class UNYCompassDatabase:
             return hashlib.md5(f.read()).hexdigest()
 
     def check_and_update_data(self):
-        """INTERMEDIATE: Check for new or updated Hunter files (txt + json) and index them"""
+        """FIXED: Check vector DB first, skip file processing if data exists"""
+        
+        # FIRST: Check if we already have data in the vector database
+        try:
+            stats = self.index.describe_index_stats()
+            total_vectors = stats.total_vector_count
+            namespace_vectors = 0
+            
+            if self.namespace in stats.namespaces:
+                namespace_vectors = stats.namespaces[self.namespace].vector_count
+            
+            print(f"📊 Vector Database Status:")
+            print(f"   Total vectors: {total_vectors}")
+            print(f"   Vectors in namespace '{self.namespace}': {namespace_vectors}")
+            
+            # If we have data, skip file processing entirely
+            if namespace_vectors > 0:
+                print(f"✅ Found {namespace_vectors} vectors in database - using existing data")
+                print("💡 To force reindexing, set CLEAR_PINECONE_INDEX=true")
+                return  # EXIT HERE - we have data!
+            else:
+                print("📁 No data in vector database, checking for local files...")
+                
+        except Exception as e:
+            print(f"⚠️ Could not check vector database status: {e}")
+            print("📁 Proceeding to check for local files...")
+        
+        # ONLY if no data exists, look for files to process
         docs_dir = current_dir / "../docs"
         
-        # STREAMLINED: Only look for your specific hybrid files
+        # Check if docs directory exists
+        if not docs_dir.exists():
+            print(f"❌ No vector data found and no local docs directory")
+            print(f"💡 Solutions:")
+            print(f"   1. Run hunter_main.py to generate local data")
+            print(f"   2. Create empty docs folder to bypass this check")  
+            print(f"   3. Check your Pinecone API key and index name")
+            return
+        
+        # Rest of your original file processing logic...
         possible_files = [
-            docs_dir / "hunter_hybrid.txt",              # Your main hybrid content
-            docs_dir / "hunter_hybrid_urls.json",        # Your hybrid URL mappings  
-            docs_dir / "hunter_hybrid_analytics.json"    # Your hybrid analytics
+            docs_dir / "hunter_hybrid.txt",              
+            docs_dir / "hunter_hybrid_urls.json",        
+            docs_dir / "hunter_hybrid_analytics.json"    
         ]
         
         files_to_process = []
@@ -114,7 +150,6 @@ class UNYCompassDatabase:
             else:
                 print("Skipping index deletion (set CLEAR_PINECONE_INDEX=true to enable).")
 
-            
             # Process all new/updated files
             for file_path, file_hash in files_to_process:
                 if file_path.suffix == '.json':
@@ -122,15 +157,7 @@ class UNYCompassDatabase:
                 else:
                     self.upload_text_file(str(file_path), file_hash)
         else:
-            # Check if index is empty and we have files to process
-            try:
-                stats = self.index.describe_index_stats()
-                if stats.total_vector_count == 0:
-                    print("No data found in index and no files to process.")
-                    print("Please ensure you have hunter_hybrid files in the docs directory.")
-            except Exception as e:
-                print(f"Could not check index stats: {e}")
-                print("Proceeding anyway...")
+            print("📁 No new files to process in docs directory")
 
     def upload_text_file(self, file_path: str, file_hash: str = None):
         """INTERMEDIATE: Enhanced upload with better chunking and metadata"""
