@@ -4,7 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cors from "cors";
 
-console.log('🚨🚨🚨 RAILWAY UPDATE TEST v4.0 🚨🚨🚨');
+console.log('🚨🚨🚨 RAILWAY UPDATE TEST v5.0 🚨🚨🚨');
 // Load environment variables
 config();
 
@@ -28,20 +28,47 @@ app.use((req, res, next) => {
     console.error('🔧 MIDDLEWARE DEBUG - Body parsed:', !!req.body);
     console.error('🔧 MIDDLEWARE DEBUG - Body content:', req.body);
     console.error('🔧 MIDDLEWARE DEBUG - Content-Type:', req.headers['content-type']);
-    console.error('🔧 MIDDLEWARE DEBUG - Raw headers:', req.headers);
   }
   next();
 });
 
-// 2. SECOND: CORS middleware (after JSON parsing)
+// 2. SECOND: CORS middleware (fixed for credentials)
 console.log('🔧 Setting up CORS middleware');
 app.use((req, res, next) => {
-  console.error('🌐 CORS - Processing request:', req.method, req.path);
+  const origin = req.headers.origin;
 
-  // Set CORS headers for ALL requests
-  res.header('Access-Control-Allow-Origin', '*');
+  console.error('🌐 CORS - Processing request:', req.method, req.path, 'from origin:', origin);
+
+  // Allow specific origins (instead of wildcard when using credentials)
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://unycompass.vercel.app'
+  ];
+
+  // Check if origin is allowed or is a vercel deployment
+  const isAllowed = !origin || allowedOrigins.includes(origin) ||
+    (origin.includes('unycompass') && origin.includes('.vercel.app'));
+
+  if (isAllowed && origin) {
+    // Always set the actual origin when credentials are used
+    res.header('Access-Control-Allow-Origin', origin);
+    console.error('✅ CORS - Origin allowed:', origin);
+  } else if (!origin) {
+    // For requests without origin (like Postman), allow but don't set credentials
+    res.header('Access-Control-Allow-Origin', '*');
+    console.error('✅ CORS - No origin, using wildcard');
+  } else {
+    console.error('❌ CORS - Origin not allowed:', origin);
+    return res.status(403).json({ error: 'CORS: Origin not allowed' });
+  }
+
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  // Only set credentials to true when we have a specific origin
+  if (origin && isAllowed) {
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
