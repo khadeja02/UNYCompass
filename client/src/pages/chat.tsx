@@ -144,8 +144,8 @@ export default function ChatPage() {
                   >
                     {/* Avatar */}
                     <Avatar className={`w-8 h-8 flex-shrink-0 ${message.isUser
-                      ? 'bg-purple-600'
-                      : 'bg-blue-600'
+                      ? 'bg-blue-600'
+                      : 'bg-gray-600 dark:bg-gray-500'
                       }`}>
                       <AvatarFallback>
                         {message.isUser ? (
@@ -155,11 +155,9 @@ export default function ChatPage() {
                         )}
                       </AvatarFallback>
                     </Avatar>
-
-                    {/* Message Content */}
                     <div className={`max-w-[75%] ${message.isUser
-                      ? 'bg-purple-600 text-white rounded-2xl rounded-tr-md px-4 py-3'
-                      : 'bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-md px-4 py-3'
+                      ? 'bg-blue-600 text-white rounded-2xl rounded-tr-md px-4 py-3 shadow-md'
+                      : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-tl-md px-4 py-3 shadow-sm'
                       }`}>
                       <MarkdownMessage
                         content={message.content}
