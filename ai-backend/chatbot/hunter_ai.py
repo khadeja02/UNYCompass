@@ -14,8 +14,14 @@ from typing import List, Dict, Optional
 
 # Load environment variables - same paths as original
 current_dir = Path(__file__).parent
-load_dotenv(dotenv_path=current_dir / "../api/hunter_api-key.env")
-load_dotenv(dotenv_path=current_dir / "../api/pinecone_api-key.env")
+env_files = [
+    current_dir / "../api/hunter_api-key.env",
+    current_dir / "../api/pinecone_api-key.env"
+]
+
+for env_file in env_files:
+    if env_file.exists():
+        load_dotenv(dotenv_path=env_file)
 
 class UNYCompassDatabase:
     def __init__(self, index_name="uny-compass-intermediate"):
