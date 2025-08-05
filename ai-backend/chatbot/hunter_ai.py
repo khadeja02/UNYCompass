@@ -11,70 +11,190 @@ from pinecone import Pinecone, ServerlessSpec
 import time
 from pathlib import Path
 from typing import List, Dict, Optional
+import sys
+
+# DEBUGGING: Environment and path information
+print("🔍 DEBUG: Starting hunter_ai.py initialization")
+print(f"   Python version: {sys.version}")
+print(f"   Current working directory: {Path.cwd()}")
+print(f"   Script location: {Path(__file__).parent}")
+print(f"   Script file: {__file__}")
 
 # Load environment variables - same paths as original
 current_dir = Path(__file__).parent
+print(f"   Current dir resolved to: {current_dir}")
+
+# Debug environment file loading
 env_files = [
     current_dir / "../api/hunter_api-key.env",
     current_dir / "../api/pinecone_api-key.env"
 ]
 
+print(f"🔑 DEBUG: Environment file loading")
 for env_file in env_files:
+    print(f"   Checking: {env_file}")
+    print(f"   Exists: {env_file.exists()}")
     if env_file.exists():
         load_dotenv(dotenv_path=env_file)
+        print(f"   ✅ Loaded: {env_file.name}")
+    else:
+        print(f"   ⚠️ Missing: {env_file.name}")
+
+# Check environment variables
+pinecone_key = os.getenv("PINECONE_API_KEY")
+openai_key = os.getenv("OPENAI_API_KEY")
+print(f"🔑 DEBUG: Environment variables")
+print(f"   PINECONE_API_KEY: {'SET (' + pinecone_key[:10] + '...)' if pinecone_key else 'MISSING'}")
+print(f"   OPENAI_API_KEY: {'SET (' + openai_key[:10] + '...)' if openai_key else 'MISSING'}")
+
+if not pinecone_key:
+    print("❌ CRITICAL: PINECONE_API_KEY is missing!")
+if not openai_key:
+    print("❌ CRITICAL: OPENAI_API_KEY is missing!")
 
 class UNYCompassDatabase:
     def __init__(self, index_name="uny-compass-intermediate"):
+        print(f"🔍 DEBUG: Initializing UNYCompassDatabase")
+        print(f"   Index name: {index_name}")
+        
         self.index_name = index_name
         self.namespace = "hunter-intermediate"
+        print(f"   Namespace: {self.namespace}")
         
-        # INTERMEDIATE: Better embedding model (768 dimensions vs 384)
-        self.model = SentenceTransformer('all-mpnet-base-v2')
+        # Test model loading with debugging
+        try:
+            print("🤖 DEBUG: Loading sentence transformer model...")
+            self.model = SentenceTransformer('all-mpnet-base-v2')
+            print("   ✅ Model loaded successfully")
+        except Exception as e:
+            print(f"   ❌ Model loading failed: {e}")
+            print(f"   Exception type: {type(e)}")
+            raise
         
-        # INTERMEDIATE: Smart text splitter for better chunking
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=800,           # Larger chunks for better context
-            chunk_overlap=100,        # Overlap to maintain context between chunks
-            separators=["\n\n--- PAGE:", "\n\n", "\n", ". ", " ", ""],  # Smart splitting priorities
-            length_function=len
-        )
-
-        # Connect to Pinecone
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-
-        # Create index with new dimensions for better model
-        if index_name not in [idx.name for idx in pc.list_indexes()]:
-            print(f"Creating intermediate RAG index '{index_name}'...")
-            pc.create_index(
-                name=index_name,
-                dimension=768,  # Changed from 384 to 768 for better model
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1")
+        # Test text splitter
+        try:
+            print("📝 DEBUG: Initializing text splitter...")
+            self.text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=800,           # Larger chunks for better context
+                chunk_overlap=100,        # Overlap to maintain context between chunks
+                separators=["\n\n--- PAGE:", "\n\n", "\n", ". ", " ", ""],  # Smart splitting priorities
+                length_function=len
             )
-            time.sleep(10)
-        else:
-            print(f"Using existing intermediate index '{index_name}'...")
+            print("   ✅ Text splitter initialized")
+        except Exception as e:
+            print(f"   ❌ Text splitter failed: {e}")
+            raise
 
-        self.index = pc.Index(index_name)
+        # Test Pinecone connection with detailed debugging
+        try:
+            print("🌲 DEBUG: Connecting to Pinecone...")
+            if not pinecone_key:
+                raise ValueError("PINECONE_API_KEY is required but not found")
+                
+            pc = Pinecone(api_key=pinecone_key)
+            print("   ✅ Pinecone client created")
+            
+            # List available indexes
+            try:
+                indexes = [idx.name for idx in pc.list_indexes()]
+                print(f"   Available indexes: {indexes}")
+            except Exception as e:
+                print(f"   ❌ Failed to list indexes: {e}")
+                raise
+            
+            # Check if target index exists
+            if index_name not in indexes:
+                print(f"   ⚠️ Index '{index_name}' not found in available indexes")
+                print(f"   Creating new index...")
+                try:
+                    pc.create_index(
+                        name=index_name,
+                        dimension=768,  # Changed from 384 to 768 for better model
+                        metric="cosine",
+                        spec=ServerlessSpec(cloud="aws", region="us-east-1")
+                    )
+                    print(f"   ✅ Index '{index_name}' created")
+                    time.sleep(10)
+                except Exception as e:
+                    print(f"   ❌ Index creation failed: {e}")
+                    raise
+            else:
+                print(f"   ✅ Using existing index '{index_name}'")
+
+            # Connect to index
+            try:
+                self.index = pc.Index(index_name)
+                print("   ✅ Connected to index")
+            except Exception as e:
+                print(f"   ❌ Failed to connect to index: {e}")
+                raise
+                
+            # Check index statistics with detailed output
+            try:
+                print("📊 DEBUG: Checking index statistics...")
+                stats = self.index.describe_index_stats()
+                print(f"   Total vectors: {stats.total_vector_count}")
+                print(f"   Namespaces: {list(stats.namespaces.keys())}")
+                
+                if self.namespace in stats.namespaces:
+                    namespace_count = stats.namespaces[self.namespace].vector_count
+                    print(f"   Vectors in '{self.namespace}': {namespace_count}")
+                    if namespace_count == 0:
+                        print(f"   ⚠️ Namespace '{self.namespace}' is empty!")
+                else:
+                    print(f"   ⚠️ Namespace '{self.namespace}' not found!")
+                    print(f"   Available namespaces: {list(stats.namespaces.keys())}")
+                    
+            except Exception as e:
+                print(f"   ❌ Failed to get index stats: {e}")
+                # Don't raise here, continue with initialization
+                
+        except Exception as e:
+            print(f"❌ CRITICAL: Pinecone connection failed: {e}")
+            print(f"   Exception type: {type(e)}")
+            raise
         
-        # INTERMEDIATE: Track indexed files to handle updates
-        self.indexed_files_record = current_dir / "indexed_files.json"
-        self.indexed_files = self.load_indexed_files()
+        # Initialize file tracking
+        try:
+            print("📁 DEBUG: Setting up file tracking...")
+            self.indexed_files_record = current_dir / "indexed_files.json"
+            print(f"   Tracking file: {self.indexed_files_record}")
+            print(f"   Tracking file exists: {self.indexed_files_record.exists()}")
+            
+            self.indexed_files = self.load_indexed_files()
+            print(f"   Loaded {len(self.indexed_files)} indexed file records")
+        except Exception as e:
+            print(f"   ❌ File tracking setup failed: {e}")
+            self.indexed_files = {}
 
-        # INTERMEDIATE: Check and update data intelligently
-        self.check_and_update_data()
+        # Run data check with debugging
+        print("🎯 DEBUG: Running data check...")
+        try:
+            self.check_and_update_data()
+            print("✅ DEBUG: Initialization complete!")
+        except Exception as e:
+            print(f"❌ DEBUG: Data check failed: {e}")
+            raise
 
     def load_indexed_files(self) -> Dict[str, str]:
         """Load record of what files have been indexed with their hashes"""
-        if self.indexed_files_record.exists():
-            with open(self.indexed_files_record, 'r') as f:
-                return json.load(f)
+        try:
+            if self.indexed_files_record.exists():
+                with open(self.indexed_files_record, 'r') as f:
+                    data = json.load(f)
+                    print(f"   📁 Loaded tracking data for {len(data)} files")
+                    return data
+        except Exception as e:
+            print(f"   ⚠️ Error loading indexed files record: {e}")
         return {}
 
     def save_indexed_files(self):
         """Save record of indexed files"""
-        with open(self.indexed_files_record, 'w') as f:
-            json.dump(self.indexed_files, f, indent=2)
+        try:
+            with open(self.indexed_files_record, 'w') as f:
+                json.dump(self.indexed_files, f, indent=2)
+        except Exception as e:
+            print(f"⚠️ Error saving indexed files record: {e}")
 
     def get_file_hash(self, file_path: Path) -> str:
         """Get hash of file to detect changes"""
@@ -83,9 +203,11 @@ class UNYCompassDatabase:
 
     def check_and_update_data(self):
         """FIXED: Check vector DB first, skip file processing if data exists"""
+        print("🔍 DEBUG: check_and_update_data() called")
         
         # FIRST: Check if we already have data in the vector database
         try:
+            print("   Checking vector database status...")
             stats = self.index.describe_index_stats()
             total_vectors = stats.total_vector_count
             namespace_vectors = 0
@@ -101,6 +223,7 @@ class UNYCompassDatabase:
             if namespace_vectors > 0:
                 print(f"✅ Found {namespace_vectors} vectors in database - using existing data")
                 print("💡 To force reindexing, set CLEAR_PINECONE_INDEX=true")
+                print("🔍 DEBUG: Exiting early - using existing vector data")
                 return  # EXIT HERE - we have data!
             else:
                 print("📁 No data in vector database, checking for local files...")
@@ -111,6 +234,8 @@ class UNYCompassDatabase:
         
         # ONLY if no data exists, look for files to process
         docs_dir = current_dir / "../docs"
+        print(f"🔍 DEBUG: Checking docs directory: {docs_dir}")
+        print(f"   Docs dir exists: {docs_dir.exists()}")
         
         # Check if docs directory exists
         if not docs_dir.exists():
@@ -119,7 +244,16 @@ class UNYCompassDatabase:
             print(f"   1. Run hunter_main.py to generate local data")
             print(f"   2. Create empty docs folder to bypass this check")  
             print(f"   3. Check your Pinecone API key and index name")
+            print("🔍 DEBUG: Exiting - no docs directory found")
             return
+        
+        # List contents of docs directory
+        if docs_dir.exists():
+            try:
+                doc_files = list(docs_dir.glob("*"))
+                print(f"   Files in docs directory: {[f.name for f in doc_files]}")
+            except Exception as e:
+                print(f"   Error listing docs directory: {e}")
         
         # Rest of your original file processing logic...
         possible_files = [
@@ -128,19 +262,31 @@ class UNYCompassDatabase:
             docs_dir / "hunter_hybrid_analytics.json"    
         ]
         
+        print(f"🔍 DEBUG: Checking for specific files...")
         files_to_process = []
         
         for file_path in possible_files:
+            print(f"   Checking: {file_path}")
+            print(f"   Exists: {file_path.exists()}")
+            
             if file_path.exists():
-                current_hash = self.get_file_hash(file_path)
-                stored_hash = self.indexed_files.get(str(file_path))
-                
-                if current_hash != stored_hash:
-                    files_to_process.append((file_path, current_hash))
-                    print(f"Found new/updated file: {file_path.name}")
+                try:
+                    current_hash = self.get_file_hash(file_path)
+                    stored_hash = self.indexed_files.get(str(file_path))
+                    
+                    if current_hash != stored_hash:
+                        files_to_process.append((file_path, current_hash))
+                        print(f"   ✅ Found new/updated file: {file_path.name}")
+                    else:
+                        print(f"   ⏭️ File unchanged: {file_path.name}")
+                except Exception as e:
+                    print(f"   ❌ Error processing {file_path.name}: {e}")
+        
+        print(f"🔍 DEBUG: Files to process: {len(files_to_process)}")
         
         if files_to_process:
             clear_index = os.getenv("CLEAR_PINECONE_INDEX", "false").lower() == "true"
+            print(f"   CLEAR_PINECONE_INDEX setting: {clear_index}")
 
             if clear_index:
                 try:
@@ -158,12 +304,16 @@ class UNYCompassDatabase:
 
             # Process all new/updated files
             for file_path, file_hash in files_to_process:
-                if file_path.suffix == '.json':
-                    self.upload_json_file(str(file_path), file_hash)
-                else:
-                    self.upload_text_file(str(file_path), file_hash)
+                try:
+                    if file_path.suffix == '.json':
+                        self.upload_json_file(str(file_path), file_hash)
+                    else:
+                        self.upload_text_file(str(file_path), file_hash)
+                except Exception as e:
+                    print(f"❌ Error processing {file_path.name}: {e}")
         else:
             print("📁 No new files to process in docs directory")
+            print("🔍 DEBUG: Exiting - no files need processing")
 
     def upload_text_file(self, file_path: str, file_hash: str = None):
         """INTERMEDIATE: Enhanced upload with better chunking and metadata"""
@@ -545,9 +695,11 @@ class UNYCompassDatabase:
 
     def search(self, query: str, top_k: int = 8) -> List[str]:
         """INTERMEDIATE: Enhanced search with query expansion and deduplication"""
+        print(f"🔍 DEBUG: search() called with query: '{query}'")
         
         # INTERMEDIATE: Expand query for better results
         expanded_queries = self.expand_query(query)
+        print(f"   Expanded to: {expanded_queries}")
         all_results = []
         
         for expanded_query in expanded_queries:
@@ -561,18 +713,26 @@ class UNYCompassDatabase:
                     namespace=self.namespace
                 )
                 
+                print(f"   Query '{expanded_query}': {len(results['matches'])} matches")
+                
                 # Collect results with scores
                 for match in results['matches']:
-                    if match['score'] > 0.3:  # Higher threshold for better quality
+                    score = match['score']
+                    if score > 0.3:  # Higher threshold for better quality
                         all_results.append({
                             'text': match['metadata']['text'],
-                            'score': match['score'],
+                            'score': score,
                             'metadata': match['metadata']
                         })
+                        print(f"     Added result with score {score:.3f}")
+                    else:
+                        print(f"     Skipped result with low score {score:.3f}")
                         
             except Exception as e:
                 print(f"Search error for query '{expanded_query}': {e}")
                 continue
+        
+        print(f"   Total results above threshold: {len(all_results)}")
         
         # INTERMEDIATE: Remove duplicates and sort by score
         seen_texts = set()
@@ -584,11 +744,62 @@ class UNYCompassDatabase:
                 seen_texts.add(text_hash)
                 unique_results.append(result['text'])
         
-        return unique_results[:top_k]
+        final_results = unique_results[:top_k]
+        print(f"   Returning {len(final_results)} unique results")
+        
+        if not final_results:
+            print("   ⚠️ NO RESULTS - this will cause generic responses!")
+        
+        return final_results
+
+    def debug_search(self, query: str, top_k: int = 5):
+        """Debug search function to see what's being returned"""
+        print(f"\n🔍 DEBUG SEARCH: '{query}'")
+        print("=" * 50)
+        
+        try:
+            expanded_queries = self.expand_query(query)
+            print(f"📝 Expanded queries: {expanded_queries}")
+            
+            all_results = []
+            
+            for i, expanded_query in enumerate(expanded_queries):
+                print(f"\n🔎 Testing query {i+1}: '{expanded_query}'")
+                
+                query_vector = self.model.encode([expanded_query])[0]
+                
+                results = self.index.query(
+                    vector=query_vector.tolist(),
+                    top_k=top_k,
+                    include_metadata=True,
+                    namespace=self.namespace
+                )
+                
+                print(f"   Found {len(results['matches'])} matches")
+                
+                for j, match in enumerate(results['matches']):
+                    score = match['score']
+                    metadata = match.get('metadata', {})
+                    text_preview = metadata.get('text', 'No text')[:200]
+                    source = metadata.get('source_file', 'Unknown')
+                    
+                    print(f"   {j+1}. Score: {score:.3f} | Source: {source}")
+                    print(f"      Preview: {text_preview}...")
+                    
+                    if score > 0.3:
+                        all_results.append(match)
+            
+            print(f"\n📊 SUMMARY: {len(all_results)} results above threshold")
+            return all_results
+            
+        except Exception as e:
+            print(f"❌ Search error: {e}")
+            return []
 
 class ConversationMemory:
     """INTERMEDIATE: Enhanced conversation memory with your original smart context tracking"""
     def __init__(self):
+        print("🔍 DEBUG: Initializing ConversationMemory")
         self.user_interests = {}
         self.mentioned_programs = set()
         self.conversation_history = []
@@ -695,9 +906,19 @@ class ConversationMemory:
 
 class UNYCompassBot:
     def __init__(self, vector_db):
+        print("🔍 DEBUG: Initializing UNYCompassBot")
         self.vector_db = vector_db
-        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.8)
+        
+        try:
+            print("   Initializing ChatOpenAI...")
+            self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.8)
+            print("   ✅ ChatOpenAI initialized")
+        except Exception as e:
+            print(f"   ❌ ChatOpenAI initialization failed: {e}")
+            raise
+            
         self.memory = ConversationMemory()
+        print("✅ DEBUG: UNYCompassBot ready")
     
     def detect_question_type(self, question):
         """YOUR ORIGINAL excellent question categorization - UNCHANGED"""
@@ -781,24 +1002,31 @@ Be helpful and informative about the specific program they're interested in."""
     
     def answer_question(self, question):
         """COMBINED: Your original smart prompting + intermediate RAG retrieval"""
+        print(f"🔍 DEBUG: answer_question() called with: '{question}'")
+        
         # INTERMEDIATE: Enhanced search with better retrieval
         chunks = self.vector_db.search(question, top_k=6)
         context = "\n\n".join(chunks) if chunks else "Limited information available."
         
+        print(f"   Context length: {len(context)} characters")
+        print(f"   Context preview: {context[:200]}...")
+        
         # YOUR ORIGINAL: Detect what type of question this is
         question_type = self.detect_question_type(question)
+        print(f"   Detected question type: {question_type}")
         
         # YOUR ORIGINAL: Route to appropriate handler
-        if question_type == 'exploration':
-            response = self.handle_exploration_question(question, context)
-        elif question_type == 'frustration':
-            response = self.handle_frustration(question, context)
-        elif question_type == 'specific_program':
-            response = self.handle_specific_program(question, context)
-        else:
-            # General response with your original approach
-            conversation_context = self.memory.get_conversation_context()
-            prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
+        try:
+            if question_type == 'exploration':
+                response = self.handle_exploration_question(question, context)
+            elif question_type == 'frustration':
+                response = self.handle_frustration(question, context)
+            elif question_type == 'specific_program':
+                response = self.handle_specific_program(question, context)
+            else:
+                # General response with your original approach
+                conversation_context = self.memory.get_conversation_context()
+                prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
 
 {conversation_context}
 
@@ -807,8 +1035,15 @@ Hunter College information: {context}
 Student question: {question}
 
 Be helpful, friendly, and conversational. Avoid excessive formatting."""
+                
+                response = self.llm.invoke(prompt).content
             
-            response = self.llm.invoke(prompt).content
+            print(f"   Response length: {len(response)} characters")
+            print(f"   Response preview: {response[:200]}...")
+            
+        except Exception as e:
+            print(f"❌ Error generating response: {e}")
+            response = "I'm having trouble accessing the Hunter College information right now. Please try asking about specific programs or requirements."
         
         # Store this exchange
         self.memory.add_exchange(question, response)
@@ -818,15 +1053,37 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
 # Helper function for backwards compatibility
 def get_database():
     """Create and return a UNYCompassDatabase instance"""
+    print("🔍 DEBUG: get_database() called")
     return UNYCompassDatabase()
 
 def main():
+    print("🔍 DEBUG: main() function called")
+    
     # Initialize
-    db = UNYCompassDatabase()
-    bot = UNYCompassBot(db)
+    try:
+        print("Initializing database...")
+        db = UNYCompassDatabase()
+        print("Initializing bot...")
+        bot = UNYCompassBot(db)
+        print("✅ Initialization complete!")
+    except Exception as e:
+        print(f"❌ Initialization failed: {e}")
+        return
     
     print("Hunter College Intermediate RAG + Smart Conversational AI Ready! (Type 'quit' to exit)")
     print("Features: Advanced RAG + Your Smart Prompting + Enhanced Memory + Frustration Handling")
+    
+    # Add debug test on startup
+    print("\n🧪 DEBUG: Running quick test...")
+    try:
+        test_response = bot.answer_question("What programs does Hunter College offer?")
+        print(f"Test response length: {len(test_response)}")
+        if "I'm having trouble accessing" in test_response:
+            print("⚠️ WARNING: Getting fallback response - there may be an issue")
+        else:
+            print("✅ Test passed - system appears to be working")
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
     
     while True:
         try:
@@ -835,7 +1092,11 @@ def main():
             if user_input.lower() in ['quit', 'exit']:
                 print("Goodbye! Good luck with your studies!")
                 break
-                
+            elif user_input.lower() == 'debug':
+                # Special debug command
+                test_query = input("Enter test query for debugging: ")
+                db.debug_search(test_query)
+                continue
             else:
                 print(f"\nAdvisor: {bot.answer_question(user_input)}")
         except KeyboardInterrupt:
