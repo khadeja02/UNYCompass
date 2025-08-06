@@ -1,6 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const LandingPage = ({ switchToLogin }) => {
+    // NEW: State for parallax scroll effect
+    const [scrollY, setScrollY] = useState(0);
+
+    // NEW: Effect to track scroll position for parallax
+    useEffect(() => {
+        const handleScroll = () => setScrollY(window.scrollY);
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
     // NEW: Animation styles for floating elements
     const floatingElementStyle = {
         position: 'absolute',
@@ -30,95 +40,96 @@ const LandingPage = ({ switchToLogin }) => {
         <>
             {/* NEW: Add CSS animations to the document */}
             <style>{animationStyles}</style>
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            background: 'linear-gradient(135deg, rgb(224, 195, 252) 0%, rgb(155, 181, 255) 100%)',
-            position: 'relative',
-            overflow: 'hidden',
-        }}>
 
-            {/* NEW: Floating Background Elements */}
-                {/* Top-left compass rose */}
-                <div style={{
-                    ...floatingElementStyle,
-                    top: '10%',
-                    left: '5%',
-                    animation: 'float 12s ease-in-out infinite'
-                }}>
-                    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                        <circle cx="30" cy="30" r="25" stroke="#4A5568" strokeWidth="2"/>
-                        <path d="M30 10 L25 25 L30 22 L35 25 Z" fill="#4A5568"/>
-                        <path d="M30 50 L35 35 L30 38 L25 35 Z" fill="#4A5568"/>
-                        <path d="M10 30 L25 25 L22 30 L25 35 Z" fill="#4A5568"/>
-                        <path d="M50 30 L35 35 L38 30 L35 25 Z" fill="#4A5568"/>
-                    </svg>
-                </div>
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                background: 'linear-gradient(135deg, rgb(224, 195, 252) 0%, rgb(155, 181, 255) 100%)',
+                position: 'relative',
+                overflow: 'hidden',
+            }}>
 
-                {/* Top-right directional arrow */}
-                <div style={{
-                    ...floatingElementStyle,
-                    top: '15%',
-                    right: '10%',
-                    animation: 'floatReverse 10s ease-in-out infinite'
-                }}>
-                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                        <path d="M20 5 L35 20 L20 35 L25 20 Z" fill="#4A5568"/>
-                        <path d="M5 20 L25 20" stroke="#4A5568" strokeWidth="3" strokeLinecap="round"/>
-                    </svg>
-                </div>
+                {/* NEW: Floating Background Elements */}
+                    {/* Top-left compass rose */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        top: '10%',
+                        left: '5%',
+                        animation: 'float 12s ease-in-out infinite'
+                    }}>
+                        <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+                            <circle cx="30" cy="30" r="25" stroke="#4A5568" strokeWidth="2"/>
+                            <path d="M30 10 L25 25 L30 22 L35 25 Z" fill="#4A5568"/>
+                            <path d="M30 50 L35 35 L30 38 L25 35 Z" fill="#4A5568"/>
+                            <path d="M10 30 L25 25 L22 30 L25 35 Z" fill="#4A5568"/>
+                            <path d="M50 30 L35 35 L38 30 L35 25 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
 
-                {/* Left side small compass */}
-                <div style={{
-                    ...floatingElementStyle,
-                    left: '8%',
-                    top: '60%',
-                    animation: 'pulse 6s ease-in-out infinite, float 15s linear infinite'
-                }}>
-                    <svg width="35" height="35" viewBox="0 0 35 35" fill="none">
-                        <circle cx="17.5" cy="17.5" r="15" stroke="#4A5568" strokeWidth="2"/>
-                        <path d="M17.5 7.5 L22.5 17.5 L17.5 15 L12.5 17.5 Z" fill="#4A5568"/>
-                    </svg>
-                </div>
+                    {/* Top-right directional arrow */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        top: '15%',
+                        right: '10%',
+                        animation: 'floatReverse 10s ease-in-out infinite'
+                    }}>
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                            <path d="M20 5 L35 20 L20 35 L25 20 Z" fill="#4A5568"/>
+                            <path d="M5 20 L25 20" stroke="#4A5568" strokeWidth="3" strokeLinecap="round"/>
+                        </svg>
+                    </div>
 
-                {/* Right side navigation star */}
-                <div style={{
-                    ...floatingElementStyle,
-                    right: '5%',
-                    top: '70%',
-                    animation: 'float 9s ease-in-out infinite'
-                }}>
-                    <svg width="45" height="45" viewBox="0 0 45 45" fill="none">
-                        <path d="M22.5 2.5 L25.5 15.5 L37.5 22.5 L25.5 29.5 L22.5 42.5 L19.5 29.5 L7.5 22.5 L19.5 15.5 Z" fill="#4A5568"/>
-                    </svg>
-                </div>
+                    {/* Left side small compass */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        left: '8%',
+                        top: '60%',
+                        animation: 'pulse 6s ease-in-out infinite, float 15s linear infinite'
+                    }}>
+                        <svg width="35" height="35" viewBox="0 0 35 35" fill="none">
+                            <circle cx="17.5" cy="17.5" r="15" stroke="#4A5568" strokeWidth="2"/>
+                            <path d="M17.5 7.5 L22.5 17.5 L17.5 15 L12.5 17.5 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
 
-                {/* Bottom left small arrow */}
-                <div style={{
-                    ...floatingElementStyle,
-                    left: '15%',
-                    bottom: '20%',
-                    animation: 'floatReverse 11s ease-in-out infinite'
-                }}>
-                    <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
-                        <path d="M15 5 L25 15 L15 25 L18 15 Z" fill="#4A5568"/>
-                    </svg>
-                </div>
+                    {/* Right side navigation star */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        right: '5%',
+                        top: '70%',
+                        animation: 'float 9s ease-in-out infinite'
+                    }}>
+                        <svg width="45" height="45" viewBox="0 0 45 45" fill="none">
+                            <path d="M22.5 2.5 L25.5 15.5 L37.5 22.5 L25.5 29.5 L22.5 42.5 L19.5 29.5 L7.5 22.5 L19.5 15.5 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
 
-                {/* Bottom right compass element */}
-                <div style={{
-                    ...floatingElementStyle,
-                    right: '12%',
-                    bottom: '15%',
-                    animation: 'pulse 8s ease-in-out infinite, floatReverse 14s linear infinite'
-                }}>
-                    <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
-                        <circle cx="25" cy="25" r="20" stroke="#4A5568" strokeWidth="2"/>
-                        <circle cx="25" cy="25" r="12" stroke="#4A5568" strokeWidth="1"/>
-                        <circle cx="25" cy="25" r="2" fill="#4A5568"/>
-                    </svg>
-                </div>
+                    {/* Bottom left small arrow */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        left: '15%',
+                        bottom: '20%',
+                        animation: 'floatReverse 11s ease-in-out infinite'
+                    }}>
+                        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                            <path d="M15 5 L25 15 L15 25 L18 15 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
+
+                    {/* Bottom right compass element */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        right: '12%',
+                        bottom: '15%',
+                        animation: 'pulse 8s ease-in-out infinite, floatReverse 14s linear infinite'
+                    }}>
+                        <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+                            <circle cx="25" cy="25" r="20" stroke="#4A5568" strokeWidth="2"/>
+                            <circle cx="25" cy="25" r="12" stroke="#4A5568" strokeWidth="1"/>
+                            <circle cx="25" cy="25" r="2" fill="#4A5568"/>
+                        </svg>
+                    </div>
 
             {/* Header with Login Button */}
             <div style={{
@@ -157,7 +168,10 @@ const LandingPage = ({ switchToLogin }) => {
                 padding: '20px'
             }}>
                 {/* Logo Section with Compass Icon */}
-                <div style={{ marginBottom: '60px' }}>
+                <div style={{ marginBottom: '60px',
+                    transform: `translateY(${scrollY * 0.8}px)`, // NEW: Parallax effect - main content moves slower than scroll
+                    transition: 'transform 0.1s ease-out'
+                 }}>
                     {/* Compass Icon */}
                     <div style={{
                         width: '120px',
@@ -219,7 +233,8 @@ const LandingPage = ({ switchToLogin }) => {
                         cursor: 'pointer',
                         boxShadow: '0 8px 24px rgba(74, 85, 104, 0.3)',
                         transition: 'all 0.3s ease',
-                        letterSpacing: '1px'
+                        letterSpacing: '1px',
+                        transform: `translateY(${scrollY * 0.4}px)` // NEW: Parallax effect - button moves at medium speed for depth
                     }}
                     onMouseOver={(e) => {
                         e.target.style.transform = 'translateY(-2px)';
