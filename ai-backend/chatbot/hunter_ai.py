@@ -694,16 +694,29 @@ class UNYCompassBot:
         self.memory = ConversationMemory()
     
     def detect_question_type(self, question):
-        """YOUR ORIGINAL excellent question categorization - UNCHANGED"""
+        """Enhanced question categorization that distinguishes direct questions from exploration requests"""
         question_lower = question.lower()
         
-        # Broad exploration questions
-        exploration_keywords = ['help picking', 'choose major', 'what major', 'undecided', 'not sure', 'explore']
-        if any(keyword in question_lower for keyword in exploration_keywords):
+        # FIRST: Check for direct informational questions (these should get direct answers)
+        direct_info_keywords = [
+            'what majors', 'what programs', 'list majors', 'available majors',
+            'what degrees', 'majors offered', 'programs offered', 'what can i study',
+            'majors available', 'programs available', 'degree options'
+        ]
+        if any(keyword in question_lower for keyword in direct_info_keywords):
+            return 'direct_info'  # New category for direct informational questions
+        
+        # THEN: Check for personal exploration (these get the "ask questions first" treatment)
+        personal_exploration_keywords = [
+            'help me pick', 'help me choose', 'help choosing', 'help picking',
+            'i\'m undecided', 'not sure what', 'don\'t know what',
+            'need help deciding', 'can\'t decide', 'help me decide'
+        ]
+        if any(keyword in question_lower for keyword in personal_exploration_keywords):
             return 'exploration'
         
         # Specific program questions
-        if 'biology' in question_lower or 'chemistry' in question_lower or 'physics' in question_lower:
+        if any(program in question_lower for program in ['biology', 'chemistry', 'physics', 'psychology', 'computer science', 'nursing', 'education']):
             return 'specific_program'
         
         # Frustration/complaint
@@ -712,95 +725,60 @@ class UNYCompassBot:
             return 'frustration'
         
         # Requirements/logistics
-        if 'requirements' in question_lower or 'credits' in question_lower or 'apply' in question_lower:
+        if any(keyword in question_lower for keyword in ['requirements', 'credits', 'apply', 'admission', 'prerequisites']):
             return 'logistics'
             
         return 'general'
-    
-    def handle_exploration_question(self, question, context):
-        """YOUR ORIGINAL excellent exploration handling - UNCHANGED"""
-        prompt = f"""You are a helpful Hunter College academic advisor talking to a student who needs help choosing a major.
 
-{context}
+    def handle_direct_info(self, question, context):
+        """Handle direct informational questions with comprehensive answers"""
+        prompt = f"""You are a Hunter College academic advisor. The student is asking a direct informational question about majors/programs available at Hunter College.
 
-IMPORTANT: The student is asking for help exploring majors, which means:
-- DO NOT immediately suggest specific programs
-- Start by asking them questions to understand their interests
-- Be conversational and supportive
-- Ask about their interests, career goals, favorite subjects, etc.
-- Only suggest specific majors AFTER you understand what they're looking for
+    Hunter College information from database: {context}
 
-Context from Hunter College database: {context}
+    IMPORTANT: 
+    - Give them a comprehensive, well-organized answer about Hunter's majors and programs
+    - Organize by schools/colleges (Arts & Sciences, Education, Health Professions, Nursing, Social Work)
+    - Include both undergraduate and graduate options
+    - Be informative and helpful
+    - You can ask a follow-up question at the END about their interests, but FIRST answer their question fully
 
-Student question: {question}
+    Student's question: {question}
 
-Respond like a real advisor would - ask questions first, suggest programs later."""
+    Provide a thorough, organized response about Hunter College's academic offerings."""
 
         return self.llm.invoke(prompt).content
-    
-    def handle_frustration(self, question, context):
-        """YOUR ORIGINAL excellent frustration handling - UNCHANGED"""
-        prompt = f"""The student is frustrated with your previous responses. They feel you made assumptions or didn't listen to them properly.
 
-Previous conversation: {self.memory.get_conversation_context()}
-
-Context: {context}
-
-IMPORTANT:
-- Acknowledge their frustration genuinely
-- Apologize for not asking questions first
-- Start over with a better approach
-- Ask them what they're actually interested in
-- Be more conversational and less formal
-
-Student's frustrated message: {question}
-
-Respond with empathy and start fresh."""
-
-        return self.llm.invoke(prompt).content
-    
-    def handle_specific_program(self, question, context):
-        """YOUR ORIGINAL excellent specific program handling - UNCHANGED"""
-        prompt = f"""The student is asking about a specific program or field at Hunter College.
-
-Context from Hunter: {context}
-
-Give them helpful information about the program they asked about. Include relevant details like degree types, requirements, and career paths. If you have specific URLs from the context, include them.
-
-Student question: {question}
-
-Be helpful and informative about the specific program they're interested in."""
-
-        return self.llm.invoke(prompt).content
-    
     def answer_question(self, question):
-        """COMBINED: Your original smart prompting + intermediate RAG retrieval"""
-        # INTERMEDIATE: Enhanced search with better retrieval
-        chunks = self.vector_db.search(question, top_k=6)
+        """Updated to handle the new direct_info category"""
+        # Enhanced search with better retrieval
+        chunks = self.vector_db.search(question, top_k=8)  # Get more results for comprehensive answers
         context = "\n\n".join(chunks) if chunks else "Limited information available."
         
-        # YOUR ORIGINAL: Detect what type of question this is
+        # Detect what type of question this is
         question_type = self.detect_question_type(question)
         
-        # YOUR ORIGINAL: Route to appropriate handler
-        if question_type == 'exploration':
+        # Route to appropriate handler
+        if question_type == 'direct_info':
+            response = self.handle_direct_info(question, context)  # New handler
+        elif question_type == 'exploration':
             response = self.handle_exploration_question(question, context)
         elif question_type == 'frustration':
             response = self.handle_frustration(question, context)
         elif question_type == 'specific_program':
             response = self.handle_specific_program(question, context)
         else:
-            # General response with your original approach
+            # General response
             conversation_context = self.memory.get_conversation_context()
             prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
 
-{conversation_context}
+    {conversation_context}
 
-Hunter College information: {context}
+    Hunter College information: {context}
 
-Student question: {question}
+    Student question: {question}
 
-Be helpful, friendly, and conversational. Avoid excessive formatting."""
+    Be helpful, friendly, and conversational. Avoid excessive formatting."""
             
             response = self.llm.invoke(prompt).content
         
@@ -808,7 +786,6 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         self.memory.add_exchange(question, response)
         
         return response
-
 # Helper function for backwards compatibility
 def get_database():
     """Create and return a UNYCompassDatabase instance"""
