@@ -87,11 +87,32 @@ export class ChatController {
 
                     const fullPrompt = `${contextString}User: ${validatedData.content}`;
 
+                    console.log('🔍 DEBUG: About to call ChatbotService.callFlaskChatbot');
+                    console.log('🔍 DEBUG: Full prompt length:', fullPrompt.length);
+                    console.log('🔍 DEBUG: Full prompt preview:', fullPrompt.substring(0, 200) + '...');
+
                     const chatbotResponse = await ChatbotService.callFlaskChatbot(fullPrompt);
+
+                    // 🔍 EXTENSIVE DEBUGGING
+                    console.log('🔍 DEBUG: ChatbotService returned:');
+                    console.log('🔍 DEBUG: Response type:', typeof chatbotResponse);
+                    console.log('🔍 DEBUG: Response keys:', Object.keys(chatbotResponse || {}));
+                    console.log('🔍 DEBUG: chatbotResponse.success:', chatbotResponse?.success);
+                    console.log('🔍 DEBUG: chatbotResponse.answer:', chatbotResponse?.answer?.substring(0, 100) + '...');
+                    console.log('🔍 DEBUG: chatbotResponse.response:', chatbotResponse?.response?.substring(0, 100) + '...');
+                    console.log('🔍 DEBUG: chatbotResponse.error:', chatbotResponse?.error);
+
+                    // Check what's actually happening in the condition
+                    const hasSuccess = chatbotResponse?.success;
+                    const hasAnswer = chatbotResponse?.answer || chatbotResponse?.response;
+                    console.log('🔍 DEBUG: hasSuccess:', hasSuccess);
+                    console.log('🔍 DEBUG: hasAnswer:', !!hasAnswer);
 
                     const aiResponseContent = chatbotResponse?.success
                         ? chatbotResponse.answer || chatbotResponse.response
-                        : "I'm having trouble accessing the Hunter College information right now. Please try asking about specific programs or requirements.";
+                        : `FALLBACK TRIGGERED: success=${chatbotResponse?.success}, error=${chatbotResponse?.error}`;
+
+                    console.log('🔍 DEBUG: Final AI content preview:', aiResponseContent.substring(0, 200) + '...');
 
                     const aiResponse = await ChatService.createMessage({
                         chatSessionId: validatedData.chatSessionId,
@@ -100,15 +121,17 @@ export class ChatController {
                     });
 
                     await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
-
                     res.json({ userMessage, aiResponse });
 
                 } catch (error) {
-                    console.error("AI processing error:", error);
+                    console.error("🔍 DEBUG: Caught error in try/catch:");
+                    console.error("🔍 DEBUG: Error type:", typeof error);
+                    console.error("🔍 DEBUG: Error message:", error instanceof Error ? error.message : 'Not an Error object');
+                    console.error("🔍 DEBUG: Error stack:", error instanceof Error ? error.stack : 'No stack');
 
                     const fallbackResponse = await ChatService.createMessage({
                         chatSessionId: validatedData.chatSessionId,
-                        content: "I'm here to help you find information about Hunter College programs. What would you like to know about?",
+                        content: `CAUGHT ERROR: ${error instanceof Error ? error.message : 'Unknown error type'}`,
                         isUser: false,
                     });
 

@@ -32,7 +32,7 @@ export class ChatbotService {
             console.log(`📦 Request payload:`, JSON.stringify(requestPayload, null, 2));
 
             const response = await axios.post(endpoint, requestPayload, {
-                timeout: 30000,
+                timeout: 120000, // Increase to 2 minutes for Hunter AI processing
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
