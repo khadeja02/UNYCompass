@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import type { Message } from '@shared/schema';
+import type { ChatSession, Message } from '@shared/schema';
 
 interface ChatbotStatus {
     status: 'online' | 'offline' | 'checking';
@@ -10,9 +10,13 @@ interface ChatbotStatus {
 }
 
 export const useChat = () => {
-    // 🤖 HUNTER AI ONLY STATE
+    const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
     const [messageInput, setMessageInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
+    const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+    const [selectedPersonalityType, setSelectedPersonalityType] = useState<string>('chatbot');
+
+    // 🤖 HUNTER AI STATUS STATE
     const [chatbotStatus, setChatbotStatus] = useState<ChatbotStatus>({
         status: 'checking',
         pythonWorking: false,
@@ -21,8 +25,9 @@ export const useChat = () => {
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const queryClient = useQueryClient();
 
-    // 🔍 Check Hunter AI status on load
+    // 🔍 Check Hunter AI status through server
     const checkChatbotStatus = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -35,7 +40,7 @@ export const useChat = () => {
                 return;
             }
 
-            console.log('🔍 Checking Hunter AI status...');
+            console.log('🔍 Checking Hunter AI status through server...');
             const response = await apiRequest("GET", "/api/chatbot/status");
             const data: ChatbotStatus = await response.json();
 
@@ -56,40 +61,206 @@ export const useChat = () => {
         }
     };
 
-    // 🤖 HUNTER AI MESSAGE MUTATION
-    const sendHunterAIMutation = useMutation({
-        mutationFn: async (data: { question: string; personalityType?: string }) => {
-            console.log('🚀 Sending to Hunter AI API:', data);
+    // 📜 CHAT SESSIONS WITH PAGINATION
+    const {
+        data: chatSessionsData,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isLoading: isLoadingSessions
+    } = useInfiniteQuery({
+        queryKey: ["/api/chat-sessions"],
+        queryFn: async ({ pageParam = 1 }) => {
+            const response = await apiRequest("GET", `/api/chat-sessions?page=${pageParam}&limit=10`);
+            const data = await response.json();
 
-            const response = await apiRequest("POST", "/api/chatbot/ask", {
-                question: data.question,
-                personalityType: data.personalityType || 'chatbot',
+            if (Array.isArray(data)) {
+                return {
+                    sessions: data,
+                    pagination: {
+                        currentPage: pageParam,
+                        hasMore: false,
+                        totalPages: 1,
+                        totalSessions: data.length
+                    }
+                };
+            } else {
+                return data;
+            }
+        },
+        getNextPageParam: (lastPage) => {
+            if (!lastPage.pagination) {
+                return undefined;
+            }
+
+            const hasMore = lastPage.pagination.hasMore;
+            const nextPage = hasMore ? lastPage.pagination.currentPage + 1 : undefined;
+            return nextPage;
+        },
+        initialPageParam: 1,
+    });
+
+    const chatSessions = chatSessionsData?.pages.flatMap((page) => {
+        return page.sessions || page;
+    }) ?? [];
+
+    // 💬 SESSION MESSAGES
+    const { data: sessionMessages = [] } = useQuery<Message[]>({
+        queryKey: ["/api/messages", currentSessionId],
+        queryFn: async () => {
+            if (!currentSessionId) return [];
+            const response = await apiRequest("GET", `/api/messages/${currentSessionId}`);
+            return response.json();
+        },
+        enabled: !!currentSessionId,
+    });
+
+    // 🆕 CREATE CHAT SESSION WITH PERSONALITY
+    const createSessionMutation = useMutation({
+        mutationFn: async (data: { personalityType?: string; title?: string }) => {
+            console.log('🆕 Creating new Hunter AI chat session:', data);
+
+            // Create session with personality type
+            const response = await apiRequest("POST", "/api/chat-sessions", {
+                personalityType: data.personalityType || selectedPersonalityType,
+                title: data.title || 'Hunter AI Chat'
+            });
+            return response.json();
+        },
+        onSuccess: (session: ChatSession) => {
+            console.log('✅ New Hunter AI session created:', session);
+            setCurrentSessionId(session.id);
+            setMessages([]);
+            queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
+
+            // Send welcome message for new sessions
+            const welcomeMessage: Message = {
+                id: Date.now(),
+                chatSessionId: session.id,
+                content: "Hi! I'm Hunter AI, your personal advisor for Hunter College. I can help you with majors, programs, requirements, and more. What would you like to know?",
+                isUser: false,
+                createdAt: new Date(),
+            };
+
+            // Add welcome message to the new session
+            setTimeout(() => {
+                if (pendingMessage) {
+                    sendMessageMutation.mutate(pendingMessage);
+                    setPendingMessage(null);
+                }
+            }, 100);
+        },
+        onError: (error) => {
+            alert(`Session creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setPendingMessage(null);
+        }
+    });
+
+    // 📤 SEND MESSAGE TO HUNTER AI VIA SERVER
+    const sendMessageMutation = useMutation({
+        mutationFn: async (content: string) => {
+            if (!currentSessionId) {
+                throw new Error("No active session");
+            }
+
+            // Check if Hunter AI is available
+            if (chatbotStatus.status === 'offline') {
+                throw new Error('Hunter AI is currently offline. Please try again later.');
+            }
+
+            console.log('📤 Sending message to Hunter AI via server:', {
+                sessionId: currentSessionId,
+                content: content.substring(0, 50) + '...',
+                personalityType: selectedPersonalityType
+            });
+
+            // Add optimistic user message immediately
+            const tempUserMessage: Message = {
+                id: -Date.now(), // Use negative number for temp messages
+                chatSessionId: currentSessionId,
+                content: content,
+                isUser: true,
+                createdAt: new Date()
+            };
+
+            queryClient.setQueryData(
+                ["/api/messages", currentSessionId],
+                (oldMessages: Message[] = []) => [...oldMessages, tempUserMessage]
+            );
+
+            // Send to server (which will call Hunter AI Flask API)
+            const response = await apiRequest("POST", "/api/messages", {
+                chatSessionId: currentSessionId,
+                content,
+                isUser: true,
+                personalityType: selectedPersonalityType // Include personality for Hunter AI
             });
 
             if (!response.ok) {
+                // Remove temp message on error
+                queryClient.setQueryData(
+                    ["/api/messages", currentSessionId],
+                    (oldMessages: Message[] = []) => oldMessages.filter(msg => msg.id !== tempUserMessage.id)
+                );
+
                 const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP ${response.status}`);
+                throw new Error(errorData.message || 'Failed to send message to Hunter AI');
             }
 
-            const responseData = await response.json();
-            console.log('✅ Hunter AI response received:', responseData);
-
-            return responseData;
+            return response.json();
         },
         onSuccess: (data) => {
-            console.log('🎉 Hunter AI success:', data);
+            console.log('✅ Hunter AI response received via server:', {
+                hasUserMessage: !!data.userMessage,
+                hasAiResponse: !!data.aiResponse
+            });
+
+            // The server returns both userMessage and aiResponse from Hunter AI
+            // Replace the entire messages cache with fresh data from server
+            if (currentSessionId) {
+                queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
+                queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
+            }
+            setMessageInput("");
         },
         onError: (error) => {
-            console.error('❌ Hunter AI error:', error);
-        },
+            console.error('❌ Hunter AI message error:', error);
+            alert('Failed to send message to Hunter AI: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        }
     });
 
-    // 🚀 MAIN MESSAGE SENDING FUNCTION (HUNTER AI ONLY)
+    // Display messages - prefer session messages for active sessions
+    const displayMessages = currentSessionId ? sessionMessages : messages;
+
+    // 🔄 Auto-scroll to bottom when new messages arrive
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [displayMessages]);
+
+    // 📏 Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
+        }
+    }, [messageInput]);
+
+    // 🔄 Check Hunter AI status and initialize on mount
+    useEffect(() => {
+        console.log('🚀 Initializing Hunter AI chat system...');
+        checkChatbotStatus();
+    }, []);
+
+    // 🚀 MAIN MESSAGE SENDING FUNCTION
     const handleSendMessage = async (content?: string, personalityType?: string) => {
         const messageContent = content || messageInput.trim();
         if (!messageContent) return;
 
-        console.log('🚀 handleSendMessage called with:', messageContent);
+        console.log('🚀 handleSendMessage called:', {
+            content: messageContent.substring(0, 50) + '...',
+            personalityType: personalityType || selectedPersonalityType,
+            hasSession: !!currentSessionId
+        });
 
         // Check if Hunter AI is available
         if (chatbotStatus.status === 'offline') {
@@ -100,77 +271,41 @@ export const useChat = () => {
         // Clear input immediately
         setMessageInput("");
 
-        // Add user message immediately to UI
-        const userMessage: Message = {
-            id: Date.now(),
-            chatSessionId: 0, // Not used for Hunter AI
-            content: messageContent,
-            isUser: true,
-            createdAt: new Date(),
-        };
+        if (currentSessionId) {
+            // For existing sessions, send with optimistic update
+            console.log('📤 Sending to existing Hunter AI session:', currentSessionId);
+            sendMessageMutation.mutate(messageContent);
+        } else {
+            // For new sessions, create session first then send message
+            console.log('🆕 Creating new Hunter AI session first...');
 
-        console.log('👤 Adding user message:', userMessage);
-        setMessages(prev => [...prev, userMessage]);
+            const tempUserMessage: Message = {
+                id: Date.now(),
+                chatSessionId: 0,
+                content: messageContent,
+                isUser: true,
+                createdAt: new Date()
+            };
 
-        // Send to Hunter AI
-        sendHunterAIMutation.mutate(
-            {
-                question: messageContent,
-                personalityType: personalityType || 'chatbot'
-            },
-            {
-                onSuccess: (data) => {
-                    console.log('✅ Hunter AI API Success:', data);
+            setMessages(prev => [...prev, tempUserMessage]);
 
-                    // Parse Hunter AI response
-                    let botContent = '';
-                    if (data.success && data.answer) {
-                        botContent = data.answer;
-                    } else if (data.response) {
-                        botContent = data.response;
-                    } else if (data.success === false && data.error) {
-                        botContent = `❌ Error: ${data.error}`;
-                    } else {
-                        console.warn('⚠️ Unexpected response format:', data);
-                        botContent = `❌ Unexpected response format. Please try again.`;
-                    }
-
-                    const botMessage: Message = {
-                        id: Date.now() + 1,
-                        chatSessionId: 0,
-                        content: botContent,
-                        isUser: false,
-                        createdAt: new Date(),
-                    };
-
-                    console.log('🤖 Adding Hunter AI response:', botMessage);
-                    setMessages(prev => [...prev, botMessage]);
-                },
-                onError: (error: any) => {
-                    console.error('❌ Hunter AI API Error:', error);
-
-                    const errorMessage: Message = {
-                        id: Date.now() + 1,
-                        chatSessionId: 0,
-                        content: `❌ ${error.message || 'Network error. Please check your connection and try again.'}`,
-                        isUser: false,
-                        createdAt: new Date(),
-                    };
-
-                    console.log('⚠️ Adding error message:', errorMessage);
-                    setMessages(prev => [...prev, errorMessage]);
-                }
-            }
-        );
+            setPendingMessage(messageContent);
+            createSessionMutation.mutate({
+                personalityType: personalityType || selectedPersonalityType,
+                title: messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '')
+            });
+        }
     };
 
     // 🆕 START NEW HUNTER AI CONVERSATION
     const handleNewChat = () => {
         console.log('🆕 Starting new Hunter AI conversation');
-        setMessages([]);
+        setCurrentSessionId(null);
         setMessageInput("");
+        setMessages([]);
+        setPendingMessage(null);
 
-        // Add welcome message
+        // Add initial welcome message for new chats
         const welcomeMessage: Message = {
             id: Date.now(),
             chatSessionId: 0,
@@ -181,27 +316,22 @@ export const useChat = () => {
         setMessages([welcomeMessage]);
     };
 
-    // 🔄 Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+    // 📋 SELECT EXISTING CHAT SESSION
+    const handleChatSelect = (chatId: number) => {
+        if (chatId === currentSessionId) return;
+        console.log('📋 Selecting Hunter AI chat session:', chatId);
+        setCurrentSessionId(chatId);
+        setMessageInput("");
+        setPendingMessage(null);
+    };
 
-    // 📏 Auto-resize textarea
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "auto";
-            textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
+    // 📄 LOAD MORE CHAT SESSIONS
+    const handleLoadMoreSessions = () => {
+        if (hasNextPage && !isFetchingNextPage) {
+            console.log('📄 Loading more Hunter AI chat sessions...');
+            fetchNextPage();
         }
-    }, [messageInput]);
-
-    // 🔄 Check Hunter AI status on component mount
-    useEffect(() => {
-        console.log('🚀 Initializing Hunter AI chat system...');
-        checkChatbotStatus();
-
-        // Start with welcome message
-        handleNewChat();
-    }, []);
+    };
 
     // 🎯 HUNTER AI STATUS BADGE
     const getStatusBadge = () => {
@@ -230,39 +360,42 @@ export const useChat = () => {
         }
     };
 
-    const isLoading = sendHunterAIMutation.isPending;
+    const isLoading = sendMessageMutation.isPending || createSessionMutation.isPending;
 
     return {
-        // 📱 STATE
+        // 📱 CORE STATE
+        currentSessionId,
         messageInput,
-        messages,
+        messages: displayMessages,
+
+        // 🤖 HUNTER AI STATE
         chatbotStatus,
+        selectedPersonalityType,
         isLoading,
 
         // 🎯 REFS
         textareaRef,
         messagesEndRef,
 
+        // 📋 CHAT SESSIONS
+        chatSessions,
+        hasMoreSessions: hasNextPage,
+        isLoadingMoreSessions: isFetchingNextPage,
+        isLoadingSessions,
+
         // ✏️ SETTERS
         setMessageInput,
+        setSelectedPersonalityType,
 
         // 🚀 ACTIONS
         handleSendMessage,
         handleNewChat,
+        handleChatSelect,
+        handleLoadMoreSessions,
         checkChatbotStatus,
         getStatusBadge,
 
-        // 🎯 HUNTER AI ONLY - No regular chat functionality
-        currentSessionId: null, // Not used
-        chatSessions: [], // Not used
-        handleChatSelect: () => { }, // Not used
-        handleLoadMoreSessions: () => { }, // Not used
-        hasMoreSessions: false, // Not used
-        isLoadingMoreSessions: false, // Not used
-        isLoadingSessions: false, // Not used
-
-        // 🤖 HUNTER AI SPECIFIC
-        isUsingChatbot: true, // Always true
-        selectedPersonalityType: 'chatbot' // Always chatbot
+        // 🎯 HUNTER AI FLAGS
+        isUsingChatbot: true, // Always true - this is Hunter AI mode
     };
 };

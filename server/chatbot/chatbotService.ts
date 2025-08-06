@@ -4,7 +4,6 @@ export class ChatbotService {
     private static readonly FLASK_API_URL =
         process.env.FLASK_API_URL || "https://unycompass-production.up.railway.app";
 
-    // Enhanced debug logging
     static {
         console.log('🔍 ChatbotService Debug Info:');
         console.log('🔍 process.env.FLASK_API_URL:', process.env.FLASK_API_URL);
@@ -14,6 +13,7 @@ export class ChatbotService {
 
     static async callFlaskChatbot(question: string, personalityType?: string) {
         try {
+            // Build contextual question with personality if provided
             let contextualQuestion = question;
             if (personalityType && personalityType !== 'chatbot' && personalityType !== 'unknown') {
                 contextualQuestion = `I am a ${personalityType.toUpperCase()} personality type. ${question}`;
@@ -22,8 +22,13 @@ export class ChatbotService {
             const endpoint = `${this.FLASK_API_URL}/api/chatbot/ask`;
             console.log(`🌐 Calling Flask API: ${endpoint}`);
             console.log(`📝 Question: "${contextualQuestion.substring(0, 100)}${contextualQuestion.length > 100 ? '...' : ''}"`);
+            console.log(`🎭 Personality Type: ${personalityType || 'none'}`);
 
-            const requestPayload = { message: contextualQuestion };
+            // FIXED: Send both message and personalityType to match Flask API expectations
+            const requestPayload = {
+                message: contextualQuestion,
+                personalityType: personalityType || null
+            };
             console.log(`📦 Request payload:`, JSON.stringify(requestPayload, null, 2));
 
             const response = await axios.post(endpoint, requestPayload, {
@@ -42,10 +47,11 @@ export class ChatbotService {
                 fullResponse: response.data
             });
 
+            // FIXED: Handle the Flask API response format properly
             return {
                 success: true,
                 question: response.data.question,
-                answer: response.data.response || response.data.answer,
+                answer: response.data.response || response.data.answer, // Flask returns 'response' field
                 response: response.data.response || response.data.answer,
                 timestamp: response.data.timestamp
             };
@@ -66,7 +72,6 @@ export class ChatbotService {
             let errorDetails = '';
 
             if (error.response) {
-                // Server responded with error status
                 console.error('❌ Server error response:', {
                     status: error.response.status,
                     statusText: error.response.statusText,
@@ -76,15 +81,10 @@ export class ChatbotService {
                 errorMessage = error.response.data?.error || `Server error: ${error.response.status}`;
                 errorDetails = JSON.stringify(error.response.data);
             } else if (error.request) {
-                // Request made but no response received
                 console.error('❌ No response received:', {
                     code: error.code,
                     message: error.message,
-                    url: this.FLASK_API_URL,
-                    errno: error.errno,
-                    syscall: error.syscall,
-                    hostname: error.hostname,
-                    port: error.port
+                    url: this.FLASK_API_URL
                 });
 
                 if (error.code === 'ECONNREFUSED') {
@@ -99,7 +99,6 @@ export class ChatbotService {
                     errorMessage = `Network error (${error.code}): ${error.message}`;
                 }
             } else {
-                // Something else happened
                 console.error('❌ Request setup error:', error.message);
                 errorMessage = error.message || 'Unknown error occurred';
             }

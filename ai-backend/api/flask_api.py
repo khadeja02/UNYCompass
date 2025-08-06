@@ -131,14 +131,28 @@ def chatbot_ask():
     if not data or 'message' not in data:
         return jsonify({"error": "Please provide a 'message' field in your request"}), 400
     
-    response = ask_question(data['message'])
+    # FIXED: Extract both message and personalityType
+    message = data['message']
+    personality_type = data.get('personalityType')  # Get personality type if provided
+    
+    print(f"🎭 Received personality type: {personality_type}")
+    
+    # Enhanced question processing with personality context
+    if personality_type and personality_type not in ['chatbot', 'unknown', None]:
+        # Add personality context to the bot's memory or processing
+        enhanced_message = f"[Student has {personality_type} personality type] {message}"
+        response = ask_question(enhanced_message)
+    else:
+        response = ask_question(message)
+    
     if "error" in response:
         return jsonify(response), 500
     
     return jsonify({
         "question": response["question"],
         "response": response["answer"],
-        "timestamp": response["timestamp"]
+        "timestamp": response["timestamp"],
+        "personality_type": personality_type  # Return it back for confirmation
     })
 
 # Optional: Reset conversation memory endpoint
