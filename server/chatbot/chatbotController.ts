@@ -13,13 +13,20 @@ export class ChatbotController {
                 });
             }
 
-            console.log(`User ${req.user.username} (${personalityType || 'no personality'}) asked: ${question}`);
+            console.log(`🚀 User ${req.user.username} (${personalityType || 'no personality'}) asked: "${question}"`);
 
             // Call Python chatbot with personality context
             const response = await ChatbotService.askQuestion(question, personalityType);
 
+            console.log(`🤖 ChatbotService response:`, {
+                success: response.success,
+                hasAnswer: !!(response as any).answer,
+                error: (response as any).error || 'none'
+            });
+
             // Check if the response indicates an error
             if (!(response as any).success) {
+                console.error(`❌ Chatbot service error:`, (response as any).error);
                 return res.status(500).json({
                     success: false,
                     error: 'Chatbot error',
@@ -27,6 +34,7 @@ export class ChatbotController {
                 });
             }
 
+            // ✅ Success response
             res.json({
                 success: true,
                 question: (response as any).question,
@@ -37,7 +45,10 @@ export class ChatbotController {
             });
 
         } catch (error: any) {
-            console.error('Chatbot API error:', error);
+            console.error('❌ Chatbot API controller error:', {
+                message: error.message,
+                stack: error.stack?.substring(0, 500)
+            });
             res.status(500).json({
                 success: false,
                 error: 'Internal server error',
@@ -48,25 +59,29 @@ export class ChatbotController {
 
     static async status(req: any, res: Response) {
         try {
-            console.log('Checking chatbot status...');
+            console.log('🔍 Checking chatbot status...');
 
             // Test if Python chatbot is working
             const testResponse = await ChatbotService.checkStatus();
-            console.log('Status check response:', testResponse);
+            console.log('✅ Status check response:', testResponse);
 
             const isWorking = (testResponse as any).success;
 
             res.json({
                 status: isWorking ? 'online' : 'offline',
                 pythonWorking: isWorking,
-                message: isWorking ? 'Chatbot is ready' : ((testResponse as any).error || 'Chatbot unavailable')
+                message: isWorking ? 'Chatbot is ready' : ((testResponse as any).error || 'Chatbot unavailable'),
+                debugInfo: (testResponse as any).debugInfo || {}
             });
         } catch (error: any) {
-            console.error('Status check error:', error);
+            console.error('❌ Status check error:', error);
             res.json({
                 status: 'offline',
                 pythonWorking: false,
-                message: error.message
+                message: error.message,
+                debugInfo: {
+                    errorInController: true
+                }
             });
         }
     }
