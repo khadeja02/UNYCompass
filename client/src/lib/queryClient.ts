@@ -54,14 +54,14 @@ export async function apiRequest(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // Determine which API to use based on endpoint
-  const url = endpoint.includes('/chatbot/')
-    ? createAIApiUrl(endpoint)    // Use AI backend for chatbot endpoints
-    : createServerApiUrl(endpoint); // Use server backend for everything else
+  // 🔧 FIXED: All /api/ endpoints should go through Node.js server
+  // Only direct AI backend calls would bypass Node.js (if any)
+  const url = createServerApiUrl(endpoint); // Always use server for /api/ endpoints
 
   console.log(`🔍 API Request: ${method} ${url}`, {
     hasToken: !!token,
-    hasData: !!data
+    hasData: !!data,
+    endpoint: endpoint
   });
 
   const res = await fetch(url, {
@@ -139,11 +139,9 @@ export const getQueryFn: <T>(options: {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      // Determine which API to use based on endpoint
+      // 🔧 FIXED: All queries go through Node.js server
       const endpoint = queryKey[0] as string;
-      const url = endpoint.includes('/chatbot/')
-        ? createAIApiUrl(endpoint)    // Use AI backend for chatbot endpoints
-        : createServerApiUrl(endpoint); // Use server backend for everything else
+      const url = createServerApiUrl(endpoint); // Always use server for /api/ endpoints
 
       console.log(`🔍 Query Request: ${url}`, { hasToken: !!token });
 
