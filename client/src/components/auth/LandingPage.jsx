@@ -15,6 +15,9 @@ const LandingPage = ({ switchToLogin }) => {
     // NEW: Interactive glow effect - tracks mouse position for floating elements
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
+    // NEW: Particle system state
+    const [particles, setParticles] = useState([]);
+
     useEffect(() => {
         const handleScroll = () => {
             const currentScrollY = window.scrollY;
@@ -45,6 +48,94 @@ const LandingPage = ({ switchToLogin }) => {
             return () => clearTimeout(timeout);
         }
     }, [currentIndex, fullText]);
+
+    // NEW: Particle system initialization and animation
+    useEffect(() => {
+        // Initialize particles with random positions and properties
+        const initializeParticles = () => {
+            const newParticles = [];
+            for (let i = 0; i < 25; i++) { // Create 25 particles
+                newParticles.push({
+                    id: i,
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    size: Math.random() * 4 + 2, // Size between 2-6px
+                    speedX: (Math.random() - 0.5) * 0.5, // Slow horizontal movement
+                    speedY: (Math.random() - 0.5) * 0.5, // Slow vertical movement
+                    opacity: Math.random() * 0.3 + 0.1, // Opacity between 0.1-0.4
+                    color: Math.random() > 0.5 ? '#4A5568' : '#8B5CF6' // Alternate between theme colors
+                });
+            }
+            setParticles(newParticles);
+        };
+
+        // Animate particles continuously
+        const animateParticles = () => {
+            setParticles(prevParticles => 
+                prevParticles.map(particle => {
+                    // Calculate distance from mouse for interaction effect
+                    const distanceFromMouse = Math.sqrt(
+                        Math.pow(mousePos.x - particle.x, 2) + Math.pow(mousePos.y - particle.y, 2)
+                    );
+                    
+                    // Repel particles from mouse cursor (within 150px radius)
+                    let newSpeedX = particle.speedX;
+                    let newSpeedY = particle.speedY;
+                    
+                    if (distanceFromMouse < 150) {
+                        const repelForce = (150 - distanceFromMouse) / 150 * 2;
+                        const angle = Math.atan2(particle.y - mousePos.y, particle.x - mousePos.x);
+                        newSpeedX += Math.cos(angle) * repelForce * 0.02;
+                        newSpeedY += Math.sin(angle) * repelForce * 0.02;
+                    }
+                    
+                    // Apply some drag to prevent particles from moving too fast
+                    newSpeedX *= 0.98;
+                    newSpeedY *= 0.98;
+                    
+                    // Update particle position
+                    let newX = particle.x + newSpeedX;
+                    let newY = particle.y + newSpeedY;
+                    
+                    // Bounce off screen edges
+                    if (newX <= 0 || newX >= window.innerWidth) {
+                        newSpeedX *= -1;
+                        newX = Math.max(0, Math.min(window.innerWidth, newX));
+                    }
+                    if (newY <= 0 || newY >= window.innerHeight) {
+                        newSpeedY *= -1;
+                        newY = Math.max(0, Math.min(window.innerHeight, newY));
+                    }
+                    
+                    return {
+                        ...particle,
+                        x: newX,
+                        y: newY,
+                        speedX: newSpeedX,
+                        speedY: newSpeedY
+                    };
+                })
+            );
+        };
+
+        // Initialize particles on component mount
+        initializeParticles();
+
+        // Set up animation loop
+        const animationInterval = setInterval(animateParticles, 16); // ~60fps
+
+        // Handle window resize
+        const handleResize = () => {
+            initializeParticles(); // Reinitialize on resize
+        };
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup
+        return () => {
+            clearInterval(animationInterval);
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [mousePos]); // Depend on mousePos to trigger particle interactions
 
     // NEW: Animation styles for floating elements
     const floatingElementStyle = {
@@ -119,13 +210,43 @@ const LandingPage = ({ switchToLogin }) => {
                 overflow: 'hidden',
             }}>
 
+                {/* NEW: Particle System Canvas */}
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none', // Allow clicks to pass through
+                    zIndex: 1 // Behind other elements but above background
+                }}>
+                    {particles.map(particle => (
+                        <div
+                            key={particle.id}
+                            style={{
+                                position: 'absolute',
+                                left: particle.x + 'px',
+                                top: particle.y + 'px',
+                                width: particle.size + 'px',
+                                height: particle.size + 'px',
+                                backgroundColor: particle.color,
+                                borderRadius: '50%',
+                                opacity: particle.opacity,
+                                transition: 'opacity 0.3s ease', // Smooth opacity transitions
+                                boxShadow: `0 0 ${particle.size * 2}px ${particle.color}40` // Subtle glow effect
+                            }}
+                        />
+                    ))}
+                </div>
+
                 {/* NEW: Floating Background Elements */}
                     {/* Top-left compass rose */}
                     <div style={{
                         ...floatingElementStyle,
                         top: '10%',
                         left: '5%',
-                        animation: 'float 12s ease-in-out infinite'
+                        animation: 'float 12s ease-in-out infinite',
+                        zIndex : 2
                     }}>
                         <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
                             <circle cx="30" cy="30" r="25" stroke="#4A5568" strokeWidth="2"/>
@@ -141,7 +262,8 @@ const LandingPage = ({ switchToLogin }) => {
                         ...floatingElementStyle,
                         top: '15%',
                         right: '10%',
-                        animation: 'floatReverse 10s ease-in-out infinite'
+                        animation: 'floatReverse 10s ease-in-out infinite',
+                        zIndex: 2
                     }}>
                         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
                             <path d="M20 5 L35 20 L20 35 L25 20 Z" fill="#4A5568"/>
@@ -154,7 +276,8 @@ const LandingPage = ({ switchToLogin }) => {
                         ...floatingElementStyle,
                         left: '8%',
                         top: '60%',
-                        animation: 'pulse 6s ease-in-out infinite, float 15s linear infinite'
+                        animation: 'pulse 6s ease-in-out infinite, float 15s linear infinite',
+                        zIndex: 2
                     }}>
                         <svg width="35" height="35" viewBox="0 0 35 35" fill="none">
                             <circle cx="17.5" cy="17.5" r="15" stroke="#4A5568" strokeWidth="2"/>
@@ -167,7 +290,8 @@ const LandingPage = ({ switchToLogin }) => {
                         ...floatingElementStyle,
                         right: '5%',
                         top: '70%',
-                        animation: 'float 9s ease-in-out infinite'
+                        animation: 'float 9s ease-in-out infinite',
+                        zIndex: 2
                     }}>
                         <svg width="45" height="45" viewBox="0 0 45 45" fill="none">
                             <path d="M22.5 2.5 L25.5 15.5 L37.5 22.5 L25.5 29.5 L22.5 42.5 L19.5 29.5 L7.5 22.5 L19.5 15.5 Z" fill="#4A5568"/>
@@ -179,7 +303,8 @@ const LandingPage = ({ switchToLogin }) => {
                         ...floatingElementStyle,
                         left: '15%',
                         bottom: '20%',
-                        animation: 'floatReverse 11s ease-in-out infinite'
+                        animation: 'floatReverse 11s ease-in-out infinite',
+                        zIndex: 2
                     }}>
                         <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
                             <path d="M15 5 L25 15 L15 25 L18 15 Z" fill="#4A5568"/>
@@ -191,7 +316,8 @@ const LandingPage = ({ switchToLogin }) => {
                         ...floatingElementStyle,
                         right: '12%',
                         bottom: '15%',
-                        animation: 'pulse 8s ease-in-out infinite, floatReverse 14s linear infinite'
+                        animation: 'pulse 8s ease-in-out infinite, floatReverse 14s linear infinite',
+                        zIndex: 2
                     }}>
                         <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
                             <circle cx="25" cy="25" r="20" stroke="#4A5568" strokeWidth="2"/>
@@ -234,7 +360,8 @@ const LandingPage = ({ switchToLogin }) => {
                 justifyContent: 'center',
                 flexDirection: 'column',
                 textAlign: 'center',
-                padding: '20px'
+                padding: '20px',
+                zIndex: 5
             }}>
                 {/* Logo Section with Compass Icon */}
                 <div style={{ marginBottom: '60px',
@@ -390,7 +517,8 @@ const LandingPage = ({ switchToLogin }) => {
                 padding: '0 40px',
                 fontSize: '14px',
                 color: '#4A5568',
-                fontWeight: '500'
+                fontWeight: '500',
+                zIndex: 5
             }}>
                 <span style={{ cursor: 'pointer' }}>Terms of Use</span>
                 <span style={{ cursor: 'pointer' }}>Privacy Policy</span>
