@@ -9,11 +9,23 @@ const LandingPage = ({ switchToLogin }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const fullText = "Discover your perfect academic path";
 
+    // NEW: Interactive glow effect - tracks mouse position for floating elements
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
     // NEW: Effect to track scroll position for parallax
     useEffect(() => {
         const handleScroll = () => setScrollY(window.scrollY);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // NEW: Mouse tracking for glow effect
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            setMousePos({ x: e.clientX, y: e.clientY });
+        };
+        window.addEventListener('mousemove', handleMouseMove);
+        return () => window.removeEventListener('mousemove', handleMouseMove);
     }, []);
 
     // NEW: Typing animation effect
@@ -32,7 +44,20 @@ const LandingPage = ({ switchToLogin }) => {
         position: 'absolute',
         opacity: 0.1,
         animation: 'float 8s ease-in-out infinite',
-        pointerEvents: 'none'
+        pointerEvents: 'none',
+        transition: 'all 0.3s ease' // NEW: Smooth transition for glow effect
+    };
+
+    // NEW: Function to calculate distance-based glow effect
+    const getGlowStyle = (elementX, elementY) => {
+        const distance = Math.sqrt(Math.pow(mousePos.x - elementX, 2) + Math.pow(mousePos.y - elementY, 2));
+        const maxDistance = 200; // CHANGED: Increased detection radius (was 150)
+        const glowIntensity = Math.max(0, (maxDistance - distance) / maxDistance);
+        
+        return {
+            opacity: 0.1 + (glowIntensity * 0.6), // CHANGED: More dramatic opacity increase (was 0.3)
+            filter: `drop-shadow(0 0 ${glowIntensity * 40}px rgba(139, 92, 246, ${glowIntensity * 0.9}))` // CHANGED: Larger, more intense glow (was 20px and 0.6 alpha)
+        };
     };
 
     // NEW: Keyframe animations defined in a style tag
@@ -49,6 +74,15 @@ const LandingPage = ({ switchToLogin }) => {
         @keyframes pulse {
             0%, 100% { opacity: 0.1; }
             50% { opacity: 0.2; }
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
     `;
 
