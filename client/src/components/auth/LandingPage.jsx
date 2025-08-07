@@ -4,6 +4,9 @@ const LandingPage = ({ switchToLogin }) => {
     // NEW: State for parallax scroll effect
     const [scrollY, setScrollY] = useState(0);
 
+    // NEW: Back to Top button visibility - shows button when user scrolls down
+    const [showBackToTop, setShowBackToTop] = useState(false);
+
     // NEW: Typing animation effect - tracks current text being typed
     const [displayedText, setDisplayedText] = useState('');
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -12,9 +15,13 @@ const LandingPage = ({ switchToLogin }) => {
     // NEW: Interactive glow effect - tracks mouse position for floating elements
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-    // NEW: Effect to track scroll position for parallax
     useEffect(() => {
-        const handleScroll = () => setScrollY(window.scrollY);
+        const handleScroll = () => {
+            const currentScrollY = window.scrollY;
+            setScrollY(currentScrollY);
+            // NEW: Show back to top button when scrolled more than 300px
+            setShowBackToTop(currentScrollY > 100);
+        };
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
@@ -60,6 +67,14 @@ const LandingPage = ({ switchToLogin }) => {
         };
     };
 
+    // NEW: Back to Top functionality - smoothly scrolls to top of page
+    const scrollToTop = () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    };
+
     // NEW: Keyframe animations defined in a style tag
     const animationStyles = `
         @keyframes float {
@@ -83,6 +98,10 @@ const LandingPage = ({ switchToLogin }) => {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     `;
 
@@ -313,7 +332,7 @@ const LandingPage = ({ switchToLogin }) => {
                         boxShadow: '0 8px 24px rgba(74, 85, 104, 0.3)',
                         transition: 'all 0.3s ease',
                         letterSpacing: '1px',
-                        transform: `translateY(${scrollY * 0.1}px)` // NEW: Parallax effect - button moves at medium speed for depth
+                        transform: `translateY(${scrollY * 0.3}px)` // NEW: Parallax effect - button moves at medium speed for depth
                     }}
                     onMouseOver={(e) => {
                         e.target.style.transform = 'translateY(-2px)';
@@ -327,6 +346,38 @@ const LandingPage = ({ switchToLogin }) => {
                     Start Exploring
                 </button>
             </div>
+
+            {/* NEW: Back to Top Button - appears when user scrolls down */}
+            {showBackToTop && (
+                <button
+                    onClick={scrollToTop}
+                    style={{
+                        position: 'fixed',
+                        bottom: '40px',
+                        right: '40px',
+                        padding: '14px 18px',
+                        background: '#8B5CF6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '50%',
+                        boxShadow: '0 4px 16px rgba(139, 92, 246, 0.3)',
+                        cursor: 'pointer',
+                        zIndex: 100,
+                        transition: 'background 0.2s, box-shadow 0.2s',
+                        fontSize: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                    aria-label="Back to Top"
+                >
+                    {/* Up arrow SVG icon */}
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 19V5" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M5 12L12 5L19 12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                </button>
+            )}
 
             {/* Footer Links */}
             <div style={{
