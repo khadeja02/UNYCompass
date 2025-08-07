@@ -70,7 +70,7 @@ const AuthPage = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(135deg,rgb(145, 0, 235) 50%,rgb(48, 3, 93) 100%)',
+            background: 'linear-gradient(135deg, rgb(224, 195, 252) 0%, rgb(155, 181, 255) 100%)',
         }}>
             <div style={{
                 maxWidth: '440px',
