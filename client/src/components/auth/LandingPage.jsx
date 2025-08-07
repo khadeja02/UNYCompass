@@ -1,14 +1,152 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const LandingPage = ({ switchToLogin }) => {
+    // NEW: State for parallax scroll effect
+    const [scrollY, setScrollY] = useState(0);
+
+    // NEW: Typing animation effect - tracks current text being typed
+    const [displayedText, setDisplayedText] = useState('');
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const fullText = "Discover your perfect academic path";
+
+    // NEW: Effect to track scroll position for parallax
+    useEffect(() => {
+        const handleScroll = () => setScrollY(window.scrollY);
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // NEW: Typing animation effect
+    useEffect(() => {
+        if (currentIndex < fullText.length) {
+            const timeout = setTimeout(() => {
+                setDisplayedText(fullText.slice(0, currentIndex + 1));
+                setCurrentIndex(currentIndex + 1);
+            }, 80); // Speed of typing (80ms per character)
+            return () => clearTimeout(timeout);
+        }
+    }, [currentIndex, fullText]);
+
+    // NEW: Animation styles for floating elements
+    const floatingElementStyle = {
+        position: 'absolute',
+        opacity: 0.1,
+        animation: 'float 8s ease-in-out infinite',
+        pointerEvents: 'none'
+    };
+
+    // NEW: Keyframe animations defined in a style tag
+    const animationStyles = `
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-20px) rotate(120deg); }
+            66% { transform: translateY(-10px) rotate(240deg); }
+        }
+        @keyframes floatReverse {
+            0%, 100% { transform: translateY(0px) rotate(360deg); }
+            50% { transform: translateY(-15px) rotate(180deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.1; }
+            50% { opacity: 0.2; }
+        }
+    `;
+
     return (
-        <div style={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            background: 'linear-gradient(135deg, rgb(224, 195, 252) 0%, rgb(155, 181, 255) 100%)',
-            position: 'relative'
-        }}>
+        <>
+            {/* NEW: Add CSS animations to the document */}
+            <style>{animationStyles}</style>
+
+            <div style={{
+                minHeight: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                background: 'linear-gradient(135deg, rgb(224, 195, 252) 0%, rgb(155, 181, 255) 100%)',
+                position: 'relative',
+                overflow: 'hidden',
+            }}>
+
+                {/* NEW: Floating Background Elements */}
+                    {/* Top-left compass rose */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        top: '10%',
+                        left: '5%',
+                        animation: 'float 12s ease-in-out infinite'
+                    }}>
+                        <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+                            <circle cx="30" cy="30" r="25" stroke="#4A5568" strokeWidth="2"/>
+                            <path d="M30 10 L25 25 L30 22 L35 25 Z" fill="#4A5568"/>
+                            <path d="M30 50 L35 35 L30 38 L25 35 Z" fill="#4A5568"/>
+                            <path d="M10 30 L25 25 L22 30 L25 35 Z" fill="#4A5568"/>
+                            <path d="M50 30 L35 35 L38 30 L35 25 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
+
+                    {/* Top-right directional arrow */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        top: '15%',
+                        right: '10%',
+                        animation: 'floatReverse 10s ease-in-out infinite'
+                    }}>
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                            <path d="M20 5 L35 20 L20 35 L25 20 Z" fill="#4A5568"/>
+                            <path d="M5 20 L25 20" stroke="#4A5568" strokeWidth="3" strokeLinecap="round"/>
+                        </svg>
+                    </div>
+
+                    {/* Left side small compass */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        left: '8%',
+                        top: '60%',
+                        animation: 'pulse 6s ease-in-out infinite, float 15s linear infinite'
+                    }}>
+                        <svg width="35" height="35" viewBox="0 0 35 35" fill="none">
+                            <circle cx="17.5" cy="17.5" r="15" stroke="#4A5568" strokeWidth="2"/>
+                            <path d="M17.5 7.5 L22.5 17.5 L17.5 15 L12.5 17.5 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
+
+                    {/* Right side navigation star */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        right: '5%',
+                        top: '70%',
+                        animation: 'float 9s ease-in-out infinite'
+                    }}>
+                        <svg width="45" height="45" viewBox="0 0 45 45" fill="none">
+                            <path d="M22.5 2.5 L25.5 15.5 L37.5 22.5 L25.5 29.5 L22.5 42.5 L19.5 29.5 L7.5 22.5 L19.5 15.5 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
+
+                    {/* Bottom left small arrow */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        left: '15%',
+                        bottom: '20%',
+                        animation: 'floatReverse 11s ease-in-out infinite'
+                    }}>
+                        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                            <path d="M15 5 L25 15 L15 25 L18 15 Z" fill="#4A5568"/>
+                        </svg>
+                    </div>
+
+                    {/* Bottom right compass element */}
+                    <div style={{
+                        ...floatingElementStyle,
+                        right: '12%',
+                        bottom: '15%',
+                        animation: 'pulse 8s ease-in-out infinite, floatReverse 14s linear infinite'
+                    }}>
+                        <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
+                            <circle cx="25" cy="25" r="20" stroke="#4A5568" strokeWidth="2"/>
+                            <circle cx="25" cy="25" r="12" stroke="#4A5568" strokeWidth="1"/>
+                            <circle cx="25" cy="25" r="2" fill="#4A5568"/>
+                        </svg>
+                    </div>
+
             {/* Header with Login Button */}
             <div style={{
                 position: 'absolute',
@@ -46,7 +184,10 @@ const LandingPage = ({ switchToLogin }) => {
                 padding: '20px'
             }}>
                 {/* Logo Section with Compass Icon */}
-                <div style={{ marginBottom: '60px' }}>
+                <div style={{ marginBottom: '60px',
+                    transform: `translateY(${scrollY * 0.3}px)`, // NEW: Parallax effect - main content moves slower than scroll
+                    transition: 'transform 0.1s ease-out'
+                 }}>
                     {/* Compass Icon */}
                     <div style={{
                         width: '120px',
@@ -80,6 +221,12 @@ const LandingPage = ({ switchToLogin }) => {
                         fontSize: '64px',
                         fontWeight: '800',
                         color: '#4A5568',
+                        background: 'linear-gradient(-45deg, #4A5568, #6B7280, #8B5CF6, #4A5568)', // NEW: Animated gradient text
+                        backgroundSize: '400% 400%', // NEW: Large background for smooth animation
+                        animation: 'gradientShift 6s ease-in-out infinite', // NEW: Subtle color shifting
+                        WebkitBackgroundClip: 'text', // NEW: Clip background to text
+                        WebkitTextFillColor: 'transparent', // NEW: Make text transparent to show gradient
+                        backgroundClip: 'text', // NEW: Standard property for non-webkit browsers
                         lineHeight: '1',
                         marginBottom: '8px',
                         letterSpacing: '-1px'
@@ -87,11 +234,34 @@ const LandingPage = ({ switchToLogin }) => {
                     <h2 style={{
                         fontSize: '32px',
                         fontWeight: '600',
-                        color: '#4A5568',
+                        background: 'linear-gradient(-45deg, #4A5568, #6B7280, #8B5CF6, #4A5568)', // NEW: Matching gradient
+                        backgroundSize: '400% 400%', // NEW: Large background for smooth animation
+                        animation: 'gradientShift 6s ease-in-out infinite', // NEW: Same animation as h1
+                        WebkitBackgroundClip: 'text', // NEW: Clip background to text
+                        WebkitTextFillColor: 'transparent', // NEW: Make text transparent to show gradient
+                        backgroundClip: 'text', // NEW: Standard property for non-webkit browsers
                         lineHeight: '1',
                         letterSpacing: '4px',
                         marginBottom: '0'
                     }}>COMPASS</h2>
+
+                    {/* NEW: Typing animation tagline */}
+                    <div style={{
+                        fontSize: '18px',
+                        color: '#6B7280',
+                        fontWeight: '600',
+                        minHeight: '25px',
+                        marginBottom: '0',
+                        fontStyle: 'italic'
+                    }}>
+                        <span>{displayedText}</span>
+                        <span style={{
+                            animation: currentIndex < fullText.length ? 'blink 1s infinite' : 'none',
+                            color: '#4A5568',
+                            fontWeight: '600',
+                            fontStyle: 'italic'
+                        }}>|</span>
+                    </div>
                 </div>
 
                 {/* Start Exploring Button */}
@@ -108,7 +278,8 @@ const LandingPage = ({ switchToLogin }) => {
                         cursor: 'pointer',
                         boxShadow: '0 8px 24px rgba(74, 85, 104, 0.3)',
                         transition: 'all 0.3s ease',
-                        letterSpacing: '1px'
+                        letterSpacing: '1px',
+                        transform: `translateY(${scrollY * 0.1}px)` // NEW: Parallax effect - button moves at medium speed for depth
                     }}
                     onMouseOver={(e) => {
                         e.target.style.transform = 'translateY(-2px)';
@@ -140,6 +311,7 @@ const LandingPage = ({ switchToLogin }) => {
                 <span style={{ cursor: 'pointer' }}>Privacy Policy</span>
             </div>
         </div>
+        </>
     );
 };
 
