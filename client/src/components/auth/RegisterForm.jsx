@@ -259,7 +259,7 @@ const RegisterForm = ({ onRegister, switchToLogin }) => {
                     style={{
                         width: '100%',
                         padding: '16px',
-                        background: 'linear-gradient(to right, #8b5cf6, #7c3aed)',
+                        background: 'linear-gradient(135deg, rgb(224, 195, 252) 0%, rgb(155, 181, 255) 100%)',
                         color: 'white',
                         fontSize: '1rem',
                         fontWeight: '600',
