@@ -4,12 +4,28 @@ const LandingPage = ({ switchToLogin }) => {
     // NEW: State for parallax scroll effect
     const [scrollY, setScrollY] = useState(0);
 
+    // NEW: Typing animation effect - tracks current text being typed
+    const [displayedText, setDisplayedText] = useState('');
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const fullText = "Discover your perfect academic path";
+
     // NEW: Effect to track scroll position for parallax
     useEffect(() => {
         const handleScroll = () => setScrollY(window.scrollY);
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
+
+    // NEW: Typing animation effect
+    useEffect(() => {
+        if (currentIndex < fullText.length) {
+            const timeout = setTimeout(() => {
+                setDisplayedText(fullText.slice(0, currentIndex + 1));
+                setCurrentIndex(currentIndex + 1);
+            }, 80); // Speed of typing (80ms per character)
+            return () => clearTimeout(timeout);
+        }
+    }, [currentIndex, fullText]);
 
     // NEW: Animation styles for floating elements
     const floatingElementStyle = {
@@ -217,6 +233,24 @@ const LandingPage = ({ switchToLogin }) => {
                         letterSpacing: '4px',
                         marginBottom: '0'
                     }}>COMPASS</h2>
+
+                    {/* NEW: Typing animation tagline */}
+                    <div style={{
+                        fontSize: '18px',
+                        color: '#6B7280',
+                        fontWeight: '600',
+                        minHeight: '25px',
+                        marginBottom: '0',
+                        fontStyle: 'italic'
+                    }}>
+                        <span>{displayedText}</span>
+                        <span style={{
+                            animation: currentIndex < fullText.length ? 'blink 1s infinite' : 'none',
+                            color: '#4A5568',
+                            fontWeight: '600',
+                            fontStyle: 'italic'
+                        }}>|</span>
+                    </div>
                 </div>
 
                 {/* Start Exploring Button */}
