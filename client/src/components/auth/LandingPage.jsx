@@ -221,6 +221,12 @@ const LandingPage = ({ switchToLogin }) => {
                         fontSize: '64px',
                         fontWeight: '800',
                         color: '#4A5568',
+                        background: 'linear-gradient(-45deg, #4A5568, #6B7280, #8B5CF6, #4A5568)', // NEW: Animated gradient text
+                        backgroundSize: '400% 400%', // NEW: Large background for smooth animation
+                        animation: 'gradientShift 6s ease-in-out infinite', // NEW: Subtle color shifting
+                        WebkitBackgroundClip: 'text', // NEW: Clip background to text
+                        WebkitTextFillColor: 'transparent', // NEW: Make text transparent to show gradient
+                        backgroundClip: 'text', // NEW: Standard property for non-webkit browsers
                         lineHeight: '1',
                         marginBottom: '8px',
                         letterSpacing: '-1px'
@@ -228,7 +234,12 @@ const LandingPage = ({ switchToLogin }) => {
                     <h2 style={{
                         fontSize: '32px',
                         fontWeight: '600',
-                        color: '#4A5568',
+                        background: 'linear-gradient(-45deg, #4A5568, #6B7280, #8B5CF6, #4A5568)', // NEW: Matching gradient
+                        backgroundSize: '400% 400%', // NEW: Large background for smooth animation
+                        animation: 'gradientShift 6s ease-in-out infinite', // NEW: Same animation as h1
+                        WebkitBackgroundClip: 'text', // NEW: Clip background to text
+                        WebkitTextFillColor: 'transparent', // NEW: Make text transparent to show gradient
+                        backgroundClip: 'text', // NEW: Standard property for non-webkit browsers
                         lineHeight: '1',
                         letterSpacing: '4px',
                         marginBottom: '0'
