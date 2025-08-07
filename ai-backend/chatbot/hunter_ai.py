@@ -734,18 +734,88 @@ class UNYCompassBot:
         """Handle direct informational questions with comprehensive answers"""
         prompt = f"""You are a Hunter College academic advisor. The student is asking a direct informational question about majors/programs available at Hunter College.
 
-    Hunter College information from database: {context}
+Hunter College information from database: {context}
 
-    IMPORTANT: 
-    - Give them a comprehensive, well-organized answer about Hunter's majors and programs
-    - Organize by schools/colleges (Arts & Sciences, Education, Health Professions, Nursing, Social Work)
-    - Include both undergraduate and graduate options
-    - Be informative and helpful
-    - You can ask a follow-up question at the END about their interests, but FIRST answer their question fully
+IMPORTANT: 
+- Give them a comprehensive, well-organized answer about Hunter's majors and programs
+- Organize by schools/colleges (Arts & Sciences, Education, Health Professions, Nursing, Social Work)
+- Include both undergraduate and graduate options
+- Be informative and helpful
+- You can ask a follow-up question at the END about their interests, but FIRST answer their question fully
 
-    Student's question: {question}
+Student's question: {question}
 
-    Provide a thorough, organized response about Hunter College's academic offerings."""
+Provide a thorough, organized response about Hunter College's academic offerings."""
+
+        return self.llm.invoke(prompt).content
+
+    def handle_exploration_question(self, question, context):
+        """Handle exploration questions - ask questions to understand their interests first"""
+        conversation_context = self.memory.get_conversation_context()
+        
+        prompt = f"""You are a Hunter College advisor helping a student who needs help choosing a major. They are asking for guidance in making this important decision.
+
+{conversation_context}
+
+Hunter College information: {context}
+
+IMPORTANT APPROACH:
+- Don't immediately list majors or make assumptions about what they want
+- Ask thoughtful questions to understand their interests, strengths, and goals first
+- Be warm, supportive, and conversational
+- Focus on understanding THEM before suggesting programs
+- Ask about things like: what subjects they enjoy, career goals, strengths, interests, etc.
+- Keep it natural and not like a formal questionnaire
+
+Student's question: {question}
+
+Help them explore their interests and goals before suggesting specific majors."""
+
+        return self.llm.invoke(prompt).content
+
+    def handle_frustration(self, question, context):
+        """Handle frustrated responses - acknowledge and redirect constructively"""
+        conversation_context = self.memory.get_conversation_context()
+        
+        prompt = f"""You are a Hunter College advisor. The student seems frustrated with your previous response, possibly because you made assumptions or didn't address what they actually asked.
+
+{conversation_context}
+
+Hunter College information: {context}
+
+IMPORTANT:
+- Acknowledge their frustration briefly and sincerely 
+- Don't be defensive
+- Redirect to actually answering what they're asking for
+- Be more direct and helpful this time
+- Focus on giving them what they need
+
+Student's frustrated response: {question}
+
+Respond with understanding and then provide what they're actually looking for."""
+
+        return self.llm.invoke(prompt).content
+
+    def handle_specific_program(self, question, context):
+        """Handle questions about specific programs/majors"""
+        conversation_context = self.memory.get_conversation_context()
+        
+        prompt = f"""You are a Hunter College advisor. The student is asking about a specific program or major at Hunter College.
+
+{conversation_context}
+
+Hunter College information: {context}
+
+IMPORTANT:
+- Provide detailed, helpful information about the specific program they're asking about
+- Include information about requirements, courses, career paths, etc. if available
+- Be comprehensive but conversational
+- If you don't have complete information, acknowledge that and suggest they contact the department
+- You can ask follow-up questions about their specific interests within that field
+
+Student's question: {question}
+
+Provide detailed information about the specific program they're interested in."""
 
         return self.llm.invoke(prompt).content
 
@@ -772,13 +842,13 @@ class UNYCompassBot:
             conversation_context = self.memory.get_conversation_context()
             prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
 
-    {conversation_context}
+{conversation_context}
 
-    Hunter College information: {context}
+Hunter College information: {context}
 
-    Student question: {question}
+Student question: {question}
 
-    Be helpful, friendly, and conversational. Avoid excessive formatting."""
+Be helpful, friendly, and conversational. Avoid excessive formatting."""
             
             response = self.llm.invoke(prompt).content
         
@@ -786,6 +856,7 @@ class UNYCompassBot:
         self.memory.add_exchange(question, response)
         
         return response
+
 # Helper function for backwards compatibility
 def get_database():
     """Create and return a UNYCompassDatabase instance"""
