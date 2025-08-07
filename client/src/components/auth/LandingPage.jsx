@@ -169,7 +169,7 @@ const LandingPage = ({ switchToLogin }) => {
             }}>
                 {/* Logo Section with Compass Icon */}
                 <div style={{ marginBottom: '60px',
-                    transform: `translateY(${scrollY * 0.8}px)`, // NEW: Parallax effect - main content moves slower than scroll
+                    transform: `translateY(${scrollY * 0.3}px)`, // NEW: Parallax effect - main content moves slower than scroll
                     transition: 'transform 0.1s ease-out'
                  }}>
                     {/* Compass Icon */}
@@ -234,7 +234,7 @@ const LandingPage = ({ switchToLogin }) => {
                         boxShadow: '0 8px 24px rgba(74, 85, 104, 0.3)',
                         transition: 'all 0.3s ease',
                         letterSpacing: '1px',
-                        transform: `translateY(${scrollY * 0.4}px)` // NEW: Parallax effect - button moves at medium speed for depth
+                        transform: `translateY(${scrollY * 0.1}px)` // NEW: Parallax effect - button moves at medium speed for depth
                     }}
                     onMouseOver={(e) => {
                         e.target.style.transform = 'translateY(-2px)';
