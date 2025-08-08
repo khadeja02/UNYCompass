@@ -159,9 +159,9 @@ const ForgotPasswordForm = ({ switchToLogin }) => {
                 </button>
             </form>
 
-            <div style={{ 
-                marginTop: '24px', 
-                fontSize: '0.875rem', 
+            <div style={{
+                marginTop: '24px',
+                fontSize: '0.875rem',
                 color: '#4871ff',
                 borderTop: '1px solid rgba(6, 2, 8, 0.1)',
                 paddingTop: '20px'
