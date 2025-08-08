@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { createServerApiUrl } from '../../config/api';
 
 const ResetPasswordForm = () => {
     const [location, navigate] = useLocation();
@@ -54,7 +55,7 @@ const ResetPasswordForm = () => {
             console.log('Token:', token);
             console.log('Password length:', password.length);
 
-            const response = await fetch('/api/auth/reset-password', {
+            const response = await fetch(createServerApiUrl('/api/auth/reset-password'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

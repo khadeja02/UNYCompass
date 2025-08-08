@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createServerApiUrl } from '../../config/api';
 
 const ForgotPasswordForm = ({ switchToLogin }) => {
     const [email, setEmail] = useState('');
@@ -22,7 +23,7 @@ const ForgotPasswordForm = ({ switchToLogin }) => {
         try {
             console.log('Making fetch request to /api/auth/forgot-password...');
 
-            const response = await fetch('/api/auth/forgot-password', {
+            const response = await fetch(createServerApiUrl('/api/auth/forgot-password'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
