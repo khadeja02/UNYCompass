@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import pkg from 'pg';
 const { Pool } = pkg;
 import { config } from 'dotenv';
-import { EmailService } from './emailService'; // NEW: Import email service
+import { EmailService } from './emailService';
 
 // Load environment variables
 config();
@@ -162,7 +162,6 @@ export class AuthService {
         return { user: { id: user.id, username: user.username, email: user.email }, token };
     }
 
-    // UPDATED: Request password reset with email sending
     static async requestPasswordReset(email: string): Promise<void> {
         console.log('🔍 Requesting password reset for:', email);
 
@@ -174,7 +173,6 @@ export class AuthService {
 
         if (result.rows.length === 0) {
             console.log('❌ User not found for email:', email);
-            // Don't throw error to prevent email enumeration
             return;
         }
 
@@ -183,10 +181,20 @@ export class AuthService {
 
         // Generate reset token
         const resetToken = crypto.randomBytes(32).toString('hex');
-        const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+        // FIXED: Use UTC timezone explicitly
+        const expiryResult = await pool.query(`
+        SELECT 
+            NOW() AT TIME ZONE 'UTC' as current_utc,
+            (NOW() AT TIME ZONE 'UTC' + INTERVAL '1 hour') as expiry_utc
+    `);
+
+        const currentUtc = expiryResult.rows[0].current_utc;
+        const resetTokenExpiry = expiryResult.rows[0].expiry_utc;
 
         console.log('🔍 Generated reset token:', resetToken);
-        console.log('🔍 Token expiry:', resetTokenExpiry);
+        console.log('🔍 Current UTC time:', currentUtc);
+        console.log('🔍 Token expiry (UTC):', resetTokenExpiry);
 
         // Store reset token in database
         await pool.query(
@@ -196,14 +204,22 @@ export class AuthService {
 
         console.log('✅ Reset token stored in database');
 
+        // Test validation immediately
+        const testQuery = await pool.query(
+            'SELECT id, (reset_token_expiry > NOW() AT TIME ZONE \'UTC\') as is_valid_utc FROM users WHERE reset_token = $1',
+            [resetToken]
+        );
+
+        console.log('🔍 IMMEDIATE TEST with UTC:', {
+            found: testQuery.rows.length > 0,
+            isValidUTC: testQuery.rows[0]?.is_valid_utc
+        });
+
         try {
-            // NEW: Send actual email instead of console logging
             await EmailService.sendPasswordResetEmail(email, resetToken);
             console.log('✅ Password reset email sent successfully to:', email);
         } catch (emailError) {
             console.error('❌ Failed to send password reset email:', emailError);
-            // Don't throw error - we don't want to reveal if email sending failed
-            // The token is still stored in database, so manual reset could work
         }
     }
 
@@ -219,14 +235,32 @@ export class AuthService {
             throw new Error('Password must be at least 6 characters long');
         }
 
-        // Find user with valid reset token
+        // FIXED: Use UTC timezone for comparison
         const result = await pool.query(
-            'SELECT id, username, email FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW()',
+            'SELECT id, username, email FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW() AT TIME ZONE \'UTC\'',
             [token]
         );
 
         if (result.rows.length === 0) {
-            console.log('❌ Invalid or expired reset token:', token);
+            console.log('❌ Invalid or expired reset token (UTC check):', token);
+
+            // Debug: Check if token exists but is expired
+            const debugResult = await pool.query(`
+            SELECT 
+                username,
+                reset_token_expiry,
+                NOW() AT TIME ZONE 'UTC' as current_utc,
+                (reset_token_expiry > NOW() AT TIME ZONE 'UTC') as is_valid_utc
+            FROM users 
+            WHERE reset_token = $1
+        `, [token]);
+
+            if (debugResult.rows.length > 0) {
+                console.log('🔍 Token found but expired (UTC):', debugResult.rows[0]);
+            } else {
+                console.log('🔍 Token not found in database at all');
+            }
+
             throw new Error('Invalid or expired reset token');
         }
 
