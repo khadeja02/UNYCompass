@@ -1,9 +1,11 @@
 // server/auth/authService.ts
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import pkg from 'pg';
 const { Pool } = pkg;
 import { config } from 'dotenv';
+import { EmailService } from './emailService'; // NEW: Import email service
 
 // Load environment variables
 config();
@@ -23,6 +25,8 @@ export interface User {
     username: string;
     email: string;
     password_hash?: string;
+    reset_token?: string;
+    reset_token_expiry?: Date;
     created_at: Date;
     updated_at?: Date;
 }
@@ -48,7 +52,7 @@ export class AuthService {
         }
     }
 
-    // Initialize users table - EXACT same as original
+    // Initialize users table - UPDATED to include reset token fields
     static async createUsersTable(): Promise<void> {
         const isConnected = await AuthService.testConnection();
         if (!isConnected) {
@@ -63,11 +67,25 @@ export class AuthService {
           username VARCHAR(50) UNIQUE NOT NULL,
           email VARCHAR(100) UNIQUE NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
+          reset_token VARCHAR(255),
+          reset_token_expiry TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
             console.log('✅ Users table created or already exists');
+
+            // Add reset token columns if they don't exist (for existing tables)
+            try {
+                await pool.query(`
+                    ALTER TABLE users 
+                    ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255),
+                    ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP
+                `);
+                console.log('✅ Reset token columns added or already exist');
+            } catch (alterErr) {
+                console.log('ℹ️ Reset token columns may already exist:', alterErr);
+            }
         } catch (err) {
             console.error('❌ Error creating users table:', err);
         }
@@ -144,6 +162,90 @@ export class AuthService {
         return { user: { id: user.id, username: user.username, email: user.email }, token };
     }
 
+    // UPDATED: Request password reset with email sending
+    static async requestPasswordReset(email: string): Promise<void> {
+        console.log('🔍 Requesting password reset for:', email);
+
+        // Check if user exists
+        const result = await pool.query(
+            'SELECT id, username, email FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (result.rows.length === 0) {
+            console.log('❌ User not found for email:', email);
+            // Don't throw error to prevent email enumeration
+            return;
+        }
+
+        const user = result.rows[0];
+        console.log('✅ User found:', user.username);
+
+        // Generate reset token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+        console.log('🔍 Generated reset token:', resetToken);
+        console.log('🔍 Token expiry:', resetTokenExpiry);
+
+        // Store reset token in database
+        await pool.query(
+            'UPDATE users SET reset_token = $1, reset_token_expiry = $2 WHERE email = $3',
+            [resetToken, resetTokenExpiry, email]
+        );
+
+        console.log('✅ Reset token stored in database');
+
+        try {
+            // NEW: Send actual email instead of console logging
+            await EmailService.sendPasswordResetEmail(email, resetToken);
+            console.log('✅ Password reset email sent successfully to:', email);
+        } catch (emailError) {
+            console.error('❌ Failed to send password reset email:', emailError);
+            // Don't throw error - we don't want to reveal if email sending failed
+            // The token is still stored in database, so manual reset could work
+        }
+    }
+
+    // Reset password with token - EXACT same as before
+    static async resetPassword(token: string, newPassword: string): Promise<void> {
+        console.log('🔍 Resetting password with token:', token);
+
+        if (!token || !newPassword) {
+            throw new Error('Token and new password are required');
+        }
+
+        if (newPassword.length < 6) {
+            throw new Error('Password must be at least 6 characters long');
+        }
+
+        // Find user with valid reset token
+        const result = await pool.query(
+            'SELECT id, username, email FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW()',
+            [token]
+        );
+
+        if (result.rows.length === 0) {
+            console.log('❌ Invalid or expired reset token:', token);
+            throw new Error('Invalid or expired reset token');
+        }
+
+        const user = result.rows[0];
+        console.log('✅ Valid reset token for user:', user.username);
+
+        // Hash new password
+        const saltRounds = 10;
+        const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+        // Update password and clear reset token
+        await pool.query(
+            'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expiry = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [newPasswordHash, user.id]
+        );
+
+        console.log('✅ Password reset successfully for user:', user.username);
+    }
+
     // Get user by ID - EXACT same logic as original
     static async getUserById(userId: number) {
         const result = await pool.query(
@@ -214,5 +316,16 @@ export class AuthService {
     // Verify JWT token - EXACT same logic as original
     static verifyToken(token: string) {
         return jwt.verify(token, JWT_SECRET!);
+    }
+
+    // NEW: Test email functionality
+    static async testEmail(email: string): Promise<void> {
+        try {
+            await EmailService.sendTestEmail(email);
+            console.log('✅ Test email sent successfully');
+        } catch (error) {
+            console.error('❌ Test email failed:', error);
+            throw error;
+        }
     }
 }
