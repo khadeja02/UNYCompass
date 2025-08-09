@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { ChatService } from "./chatService";
 import { ChatbotService } from "../chatbot/chatbotService";
+import { ConversationContextManager } from "./contextManager";
 
 export class ChatController {
     getPersonalityTypes = async (req: Request, res: Response) => {
@@ -70,30 +71,29 @@ export class ChatController {
         try {
             const validatedData = req.body;
 
+            // Still save user message to database for persistence
             const userMessage = await ChatService.createMessage(validatedData);
 
             if (validatedData.isUser) {
                 try {
-                    const recentMessages = await ChatService.getRecentMessages(
-                        validatedData.chatSessionId,
-                        8
+                    // 🚀 FAST PATH: Get context from memory instead of slow database query
+                    const contextString = ConversationContextManager.getContextString(
+                        validatedData.chatSessionId
                     );
-
-                    const contextString = recentMessages.length > 0
-                        ? recentMessages
-                            .map(msg => `${msg.isUser ? "User" : "Assistant"}: ${msg.content}`)
-                            .join("\n") + "\n\n"
-                        : "";
 
                     const fullPrompt = `${contextString}User: ${validatedData.content}`;
 
-                    console.log('🔍 DEBUG: About to call ChatbotService.callFlaskChatbot');
-                    console.log('🔍 DEBUG: Full prompt length:', fullPrompt.length);
-                    console.log('🔍 DEBUG: Full prompt preview:', fullPrompt.substring(0, 200) + '...');
+                    console.log('🚀 FAST PATH: Using in-memory context');
+                    console.log(`📏 Context size: ${contextString.length} characters`);
+                    console.log(`🔍 Session ${validatedData.chatSessionId} - calling Flask API...`);
 
+                    const startTime = Date.now();
                     const chatbotResponse = await ChatbotService.callFlaskChatbot(fullPrompt);
+                    const apiTime = Date.now() - startTime;
 
-                    // 🔍 EXTENSIVE DEBUGGING
+                    console.log(`⚡ Flask API completed in ${apiTime}ms`);
+
+                    // 🔍 EXTENSIVE DEBUGGING - keeping your original debug logs
                     console.log('🔍 DEBUG: ChatbotService returned:');
                     console.log('🔍 DEBUG: Response type:', typeof chatbotResponse);
                     console.log('🔍 DEBUG: Response keys:', Object.keys(chatbotResponse || {}));
@@ -114,17 +114,30 @@ export class ChatController {
 
                     console.log('🔍 DEBUG: Final AI content preview:', aiResponseContent.substring(0, 200) + '...');
 
+                    // Save AI response to database
                     const aiResponse = await ChatService.createMessage({
                         chatSessionId: validatedData.chatSessionId,
                         content: aiResponseContent,
                         isUser: false,
                     });
 
+                    // 💾 Update in-memory context with both messages
+                    ConversationContextManager.addMessage(
+                        validatedData.chatSessionId,
+                        validatedData.content,
+                        true
+                    );
+                    ConversationContextManager.addMessage(
+                        validatedData.chatSessionId,
+                        aiResponseContent,
+                        false
+                    );
+
                     await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
                     res.json({ userMessage, aiResponse });
 
                 } catch (error) {
-                    console.error("🔍 DEBUG: Caught error in try/catch:");
+                    console.error("🔍 DEBUG: Caught error in fast path:");
                     console.error("🔍 DEBUG: Error type:", typeof error);
                     console.error("🔍 DEBUG: Error message:", error instanceof Error ? error.message : 'Not an Error object');
                     console.error("🔍 DEBUG: Error stack:", error instanceof Error ? error.stack : 'No stack');
@@ -163,10 +176,40 @@ export class ChatController {
             }
 
             const messages = await ChatService.getMessagesBySessionId(sessionId);
+
+            // 💾 POPULATE in-memory context when loading messages
+            // This ensures context is available even after server restarts
+            ConversationContextManager.clearSession(sessionId); // Clear any stale data
+
+            // Add recent messages to context (last 4 messages)
+            const recentMessages = messages.slice(-4);
+            for (const msg of recentMessages) {
+                ConversationContextManager.addMessage(sessionId, msg.content, msg.isUser);
+            }
+
+            console.log(`💾 Populated context for session ${sessionId} with ${recentMessages.length} messages`);
+
             res.json(messages);
         } catch (error) {
             console.error("Get messages error:", error);
             res.status(500).json({ message: "Failed to fetch messages" });
+        }
+    };
+
+    // Optional: Debug endpoint to see context manager stats
+    getContextStats = async (req: any, res: Response) => {
+        try {
+            const stats = ConversationContextManager.getStats();
+            res.json({
+                contextManager: stats,
+                timestamp: new Date().toISOString(),
+                message: "Context manager statistics"
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: 'Failed to get context stats',
+                message: error instanceof Error ? error.message : 'Unknown error'
+            });
         }
     };
 }
