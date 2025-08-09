@@ -11,101 +11,67 @@ from pinecone import Pinecone, ServerlessSpec
 import time
 from pathlib import Path
 from typing import List, Dict, Optional
+from functools import lru_cache
+import threading
 
-# Load environment variables - same paths as original
+# Load environment variables
 current_dir = Path(__file__).parent
 load_dotenv(dotenv_path=current_dir / "../api/hunter_api-key.env")
 load_dotenv(dotenv_path=current_dir / "../api/pinecone_api-key.env")
 
-class UNYCompassBot:
-    def __init__(self, vector_db):
-        self.vector_db = vector_db
-        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.8)
-        # 🔄 CHANGED: Store multiple memories by session ID
-        self.session_memories = {}  # Dictionary: {session_id: ConversationMemory}
+class UNYCompassDatabase:
+    """OPTIMIZED: Singleton pattern with connection pooling and lazy loading"""
     
-    def get_memory_for_session(self, session_id):
-        """Get or create conversation memory for a specific session"""
-        if session_id not in self.session_memories:
-            print(f"🆕 Creating new conversation memory for session {session_id}")
-            self.session_memories[session_id] = ConversationMemory()
-        return self.session_memories[session_id]
+    _instance = None
+    _lock = threading.Lock()
     
-    def clear_session_memory(self, session_id):
-        """Clear memory for a specific session"""
-        if session_id in self.session_memories:
-            del self.session_memories[session_id]
-            print(f"🗑️ Cleared conversation memory for session {session_id}")
+    def __new__(cls, index_name="uny-compass-intermediate"):
+        """Singleton pattern - reuse the same instance"""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    print("🏗️ Creating new UNYCompassDatabase instance...")
+                    cls._instance = super(UNYCompassDatabase, cls).__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
     
-    def answer_question(self, question, session_id=None):
-        """Updated to use session-specific memory"""
-        
-        # Get session-specific memory
-        if session_id:
-            memory = self.get_memory_for_session(session_id)
-        else:
-            # Fallback for backward compatibility
-            memory = ConversationMemory()
-        
-        # Enhanced search with better retrieval
-        chunks = self.vector_db.search(question, top_k=8)
-        context = "\n\n".join(chunks) if chunks else "Limited information available."
-        
-        # Detect what type of question this is
-        question_type = self.detect_question_type(question)
-        
-        # Route to appropriate handler with session-specific memory
-        if question_type == 'direct_info':
-            response = self.handle_direct_info(question, context, memory)
-        elif question_type == 'exploration':
-            response = self.handle_exploration_question(question, context, memory)
-        elif question_type == 'frustration':
-            response = self.handle_frustration(question, context, memory)
-        elif question_type == 'specific_program':
-            response = self.handle_specific_program(question, context, memory)
-        else:
-            # General response with session memory
-            conversation_context = memory.get_conversation_context()
-            prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
-
-{conversation_context}
-
-Hunter College information: {context}
-
-Student question: {question}
-
-Be helpful, friendly, and conversational. Avoid excessive formatting."""
-            
-            response = self.llm.invoke(prompt).content
-        
-        # Store this exchange in session-specific memory
-        memory.add_exchange(question, response)
-        
-        return response
     def __init__(self, index_name="uny-compass-intermediate"):
+        # Only initialize once
+        if getattr(self, '_initialized', False):
+            print("♻️ Reusing existing UNYCompassDatabase instance")
+            return
+            
+        print("🚀 Initializing UNYCompassDatabase (one-time setup)...")
+        start_time = time.time()
+        
         self.index_name = index_name
         self.namespace = "hunter-intermediate"
         
-        # INTERMEDIATE: Better embedding model (768 dimensions vs 384)
+        # OPTIMIZATION: Load model once and cache
+        print("📦 Loading SentenceTransformer model...")
+        model_start = time.time()
         self.model = SentenceTransformer('all-mpnet-base-v2')
+        print(f"✅ Model loaded in {time.time() - model_start:.2f}s")
         
-        # INTERMEDIATE: Smart text splitter for better chunking
+        # Smart text splitter for better chunking
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=800,           # Larger chunks for better context
-            chunk_overlap=100,        # Overlap to maintain context between chunks
-            separators=["\n\n--- PAGE:", "\n\n", "\n", ". ", " ", ""],  # Smart splitting priorities
+            chunk_size=800,
+            chunk_overlap=100,
+            separators=["\n\n--- PAGE:", "\n\n", "\n", ". ", " ", ""],
             length_function=len
         )
 
-        # Connect to Pinecone
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-
+        # OPTIMIZATION: Persistent Pinecone connection
+        print("🔌 Connecting to Pinecone...")
+        pinecone_start = time.time()
+        self.pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        
         # Create index with new dimensions for better model
-        if index_name not in [idx.name for idx in pc.list_indexes()]:
-            print(f"Creating intermediate RAG index '{index_name}'...")
-            pc.create_index(
+        if index_name not in [idx.name for idx in self.pc.list_indexes()]:
+            print(f"🆕 Creating intermediate RAG index '{index_name}'...")
+            self.pc.create_index(
                 name=index_name,
-                dimension=768,  # Changed from 384 to 768 for better model
+                dimension=768,
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )
@@ -113,14 +79,19 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         else:
             print(f"Using existing intermediate index '{index_name}'...")
 
-        self.index = pc.Index(index_name)
+        self.index = self.pc.Index(index_name)
+        print(f"✅ Pinecone connected in {time.time() - pinecone_start:.2f}s")
         
-        # INTERMEDIATE: Track indexed files to handle updates
+        # Track indexed files to handle updates
         self.indexed_files_record = current_dir / "indexed_files.json"
         self.indexed_files = self.load_indexed_files()
 
-        # INTERMEDIATE: Check and update data intelligently
+        # OPTIMIZATION: Quick data check - don't reprocess if data exists
         self.check_and_update_data()
+
+        self._initialized = True
+        total_time = time.time() - start_time
+        print(f"🎉 UNYCompassDatabase initialized in {total_time:.2f}s")
 
     def load_indexed_files(self) -> Dict[str, str]:
         """Load record of what files have been indexed with their hashes"""
@@ -140,7 +111,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
             return hashlib.md5(f.read()).hexdigest()
 
     def check_and_update_data(self):
-        """FIXED: Check vector DB first, skip file processing if data exists"""
+        """OPTIMIZED: Check vector DB first, skip file processing if data exists"""
         
         # FIRST: Check if we already have data in the vector database
         try:
@@ -179,7 +150,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
             print(f"   3. Check your Pinecone API key and index name")
             return
         
-        # Rest of your original file processing logic...
+        # Rest of file processing logic
         possible_files = [
             docs_dir / "hunter_hybrid.txt",              
             docs_dir / "hunter_hybrid_urls.json",        
@@ -224,7 +195,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
             print("📁 No new files to process in docs directory")
 
     def upload_text_file(self, file_path: str, file_hash: str = None):
-        """INTERMEDIATE: Enhanced upload with better chunking and metadata"""
+        """Enhanced upload with better chunking and metadata"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 text = f.read()
@@ -238,7 +209,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
 
         print(f"Processing {Path(file_path).name} with intermediate RAG...")
         
-        # INTERMEDIATE: Parse page structure if it exists (preserves your crawl structure)
+        # Parse page structure if it exists
         chunks_with_metadata = []
         
         if "--- PAGE:" in text:
@@ -253,7 +224,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
                     page_content = lines[1].strip()
                     
                     if page_content:
-                        # INTERMEDIATE: Extract rich metadata from URL and content
+                        # Extract rich metadata from URL and content
                         metadata = self.extract_metadata(url_line, page_content)
                         
                         # Use smart text splitter on each page
@@ -287,14 +258,14 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
             print("No chunks created")
             return
         
-        # INTERMEDIATE: Create embeddings with better model and upload in batches
+        # Create embeddings with better model and upload in batches
         vectors = []
         for i, (chunk, metadata) in enumerate(chunks_with_metadata):
             try:
                 embedding = self.model.encode([chunk])[0]
                 
-                # INTERMEDIATE: Store more text in metadata
-                metadata['text'] = chunk[:8000]  # Store more text than original
+                # Store more text in metadata
+                metadata['text'] = chunk[:8000]
                 metadata['text_length'] = len(chunk)
                 
                 vectors.append({
@@ -325,7 +296,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         print(f"Upload complete: {len(chunks_with_metadata)} chunks from {Path(file_path).name}")
 
     def upload_json_file(self, file_path: str, file_hash: str = None):
-        """ENHANCED: Process JSON files with structured Hunter data"""
+        """Process JSON files with structured Hunter data"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -468,7 +439,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
                 embedding = self.model.encode([chunk])[0]
                 
                 # Store the content and metadata
-                metadata['text'] = chunk[:8000]  # Store content in metadata
+                metadata['text'] = chunk[:8000]
                 metadata['text_length'] = len(chunk)
                 
                 vectors.append({
@@ -499,7 +470,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         print(f"JSON upload complete: {len(chunks_with_metadata)} items from {Path(file_path).name}")
 
     def extract_metadata(self, url: str, content: str) -> Dict:
-        """INTERMEDIATE: Extract rich metadata for better filtering and search"""
+        """Extract rich metadata for better filtering and search"""
         metadata = {
             'url': url if url.startswith('http') else '',
             'content_type': 'unknown'
@@ -562,7 +533,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         elif any(term in url for term in ['undergraduate', 'graduate', 'program']):
             metadata['content_type'] = 'program_info'
         
-        # INTERMEDIATE: Extract degree mentions from content
+        # Extract degree mentions from content
         degree_patterns = ['BA', 'BS', 'MA', 'MS', 'PhD', 'MFA', 'MSW', 'MPH', 'DNP', 'DPT']
         found_degrees = [degree for degree in degree_patterns if degree in content]
         if found_degrees:
@@ -571,7 +542,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         return metadata
 
     def expand_query(self, query: str) -> List[str]:
-        """INTERMEDIATE: Expand query with synonyms and related terms"""
+        """Expand query with synonyms and related terms"""
         query_lower = query.lower()
         expanded_queries = [query]  # Always include original
         
@@ -601,10 +572,11 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         
         return expanded_queries[:3]  # Limit total queries
 
+    @lru_cache(maxsize=500)  # Cache recent searches
     def search(self, query: str, top_k: int = 8) -> List[str]:
-        """INTERMEDIATE: Enhanced search with query expansion and deduplication"""
+        """OPTIMIZED: Enhanced search with query expansion and deduplication"""
         
-        # INTERMEDIATE: Expand query for better results
+        # Expand query for better results
         expanded_queries = self.expand_query(query)
         all_results = []
         
@@ -632,7 +604,7 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
                 print(f"Search error for query '{expanded_query}': {e}")
                 continue
         
-        # INTERMEDIATE: Remove duplicates and sort by score
+        # Remove duplicates and sort by score
         seen_texts = set()
         unique_results = []
         
@@ -645,14 +617,14 @@ Be helpful, friendly, and conversational. Avoid excessive formatting."""
         return unique_results[:top_k]
 
 class ConversationMemory:
-    """INTERMEDIATE: Enhanced conversation memory with your original smart context tracking"""
+    """Enhanced conversation memory with context tracking"""
     def __init__(self):
         self.user_interests = {}
         self.mentioned_programs = set()
         self.conversation_history = []
         self.user_frustrations = []
         
-        # INTERMEDIATE: Enhanced context tracking
+        # Enhanced context tracking
         self.user_context = {
             'current_school': None,
             'current_department': None,
@@ -668,15 +640,15 @@ class ConversationMemory:
             'timestamp': time.time()
         })
         
-        # INTERMEDIATE: Extract enhanced context
+        # Extract enhanced context
         self.extract_enhanced_context(question, response)
         
-        # Keep only last 5 exchanges like original
+        # Keep only last 5 exchanges
         if len(self.conversation_history) > 5:
             self.conversation_history.pop(0)
     
     def extract_enhanced_context(self, question: str, response: str):
-        """INTERMEDIATE: Extract context clues from conversation"""
+        """Extract context clues from conversation"""
         question_lower = question.lower()
         
         # Extract school mentions with more patterns
@@ -752,11 +724,38 @@ class ConversationMemory:
         return context
 
 class UNYCompassBot:
-    def __init__(self, vector_db):
-        self.vector_db = vector_db
-        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.8)
-        self.memory = ConversationMemory()
+    """OPTIMIZED: Bot with session management and persistent connections"""
     
+    def __init__(self, vector_db):
+        print("🤖 Initializing UNYCompassBot...")
+        self.vector_db = vector_db
+        
+        # OPTIMIZATION: Reuse OpenAI client connection
+        self.llm = ChatOpenAI(
+            model='gpt-4o-mini', 
+            temperature=0.8,
+            max_retries=2,  # Faster failure
+            request_timeout=30  # 30s timeout instead of default 60s
+        )
+        
+        # Store multiple memories by session ID
+        self.session_memories = {}  # Dictionary: {session_id: ConversationMemory}
+        print("✅ UNYCompassBot ready!")
+    
+    def get_memory_for_session(self, session_id):
+        """Get or create conversation memory for a specific session"""
+        if session_id not in self.session_memories:
+            print(f"🆕 Creating new conversation memory for session {session_id}")
+            self.session_memories[session_id] = ConversationMemory()
+        return self.session_memories[session_id]
+    
+    def clear_session_memory(self, session_id):
+        """Clear memory for a specific session"""
+        if session_id in self.session_memories:
+            del self.session_memories[session_id]
+            print(f"🗑️ Cleared conversation memory for session {session_id}")
+    
+    @lru_cache(maxsize=100)  # Cache recent question types
     def detect_question_type(self, question):
         """Enhanced question categorization that distinguishes direct questions from exploration requests"""
         question_lower = question.lower()
@@ -794,9 +793,13 @@ class UNYCompassBot:
             
         return 'general'
 
-    def handle_direct_info(self, question, context):
+    def handle_direct_info(self, question, context, memory):
         """Handle direct informational questions with comprehensive answers"""
+        conversation_context = memory.get_conversation_context()
+        
         prompt = f"""You are a Hunter College academic advisor. The student is asking a direct informational question about majors/programs available at Hunter College.
+
+{conversation_context}
 
 Hunter College information from database: {context}
 
@@ -813,9 +816,9 @@ Provide a thorough, organized response about Hunter College's academic offerings
 
         return self.llm.invoke(prompt).content
 
-    def handle_exploration_question(self, question, context):
+    def handle_exploration_question(self, question, context, memory):
         """Handle exploration questions - ask questions to understand their interests first"""
-        conversation_context = self.memory.get_conversation_context()
+        conversation_context = memory.get_conversation_context()
         
         prompt = f"""You are a Hunter College advisor helping a student who needs help choosing a major. They are asking for guidance in making this important decision.
 
@@ -837,9 +840,9 @@ Help them explore their interests and goals before suggesting specific majors.""
 
         return self.llm.invoke(prompt).content
 
-    def handle_frustration(self, question, context):
+    def handle_frustration(self, question, context, memory):
         """Handle frustrated responses - acknowledge and redirect constructively"""
-        conversation_context = self.memory.get_conversation_context()
+        conversation_context = memory.get_conversation_context()
         
         prompt = f"""You are a Hunter College advisor. The student seems frustrated with your previous response, possibly because you made assumptions or didn't address what they actually asked.
 
@@ -860,9 +863,9 @@ Respond with understanding and then provide what they're actually looking for.""
 
         return self.llm.invoke(prompt).content
 
-    def handle_specific_program(self, question, context):
+    def handle_specific_program(self, question, context, memory):
         """Handle questions about specific programs/majors"""
-        conversation_context = self.memory.get_conversation_context()
+        conversation_context = memory.get_conversation_context()
         
         prompt = f"""You are a Hunter College advisor. The student is asking about a specific program or major at Hunter College.
 
@@ -883,28 +886,11 @@ Provide detailed information about the specific program they're interested in.""
 
         return self.llm.invoke(prompt).content
 
-    def answer_question(self, question):
-        """Updated to handle the new direct_info category"""
-        # Enhanced search with better retrieval
-        chunks = self.vector_db.search(question, top_k=8)  # Get more results for comprehensive answers
-        context = "\n\n".join(chunks) if chunks else "Limited information available."
+    def handle_general_question(self, question, context, memory):
+        """Handle general questions"""
+        conversation_context = memory.get_conversation_context()
         
-        # Detect what type of question this is
-        question_type = self.detect_question_type(question)
-        
-        # Route to appropriate handler
-        if question_type == 'direct_info':
-            response = self.handle_direct_info(question, context)  # New handler
-        elif question_type == 'exploration':
-            response = self.handle_exploration_question(question, context)
-        elif question_type == 'frustration':
-            response = self.handle_frustration(question, context)
-        elif question_type == 'specific_program':
-            response = self.handle_specific_program(question, context)
-        else:
-            # General response
-            conversation_context = self.memory.get_conversation_context()
-            prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
+        prompt = f"""You are a helpful Hunter College advisor.
 
 {conversation_context}
 
@@ -913,26 +899,70 @@ Hunter College information: {context}
 Student question: {question}
 
 Be helpful, friendly, and conversational. Avoid excessive formatting."""
-            
-            response = self.llm.invoke(prompt).content
+
+        return self.llm.invoke(prompt).content
+
+    def answer_question(self, question, session_id=None):
+        """Updated to use session-specific memory with timing"""
+        start_time = time.time()
         
-        # Store this exchange
-        self.memory.add_exchange(question, response)
+        # Get session-specific memory
+        if session_id:
+            memory = self.get_memory_for_session(session_id)
+        else:
+            # Fallback for backward compatibility
+            memory = ConversationMemory()
+        
+        # Enhanced search with better retrieval
+        search_start = time.time()
+        chunks = self.vector_db.search(question, top_k=8)
+        search_time = time.time() - search_start
+        
+        context = "\n\n".join(chunks) if chunks else "Limited information available."
+        
+        # Detect what type of question this is
+        question_type = self.detect_question_type(question)
+        
+        # Route to appropriate handler with session-specific memory
+        llm_start = time.time()
+        
+        if question_type == 'direct_info':
+            response = self.handle_direct_info(question, context, memory)
+        elif question_type == 'exploration':
+            response = self.handle_exploration_question(question, context, memory)
+        elif question_type == 'frustration':
+            response = self.handle_frustration(question, context, memory)
+        elif question_type == 'specific_program':
+            response = self.handle_specific_program(question, context, memory)
+        else:
+            # General response with session memory
+            response = self.handle_general_question(question, context, memory)
+        
+        llm_time = time.time() - llm_start
+        total_time = time.time() - start_time
+        
+        print(f"⚡ Answer generated - Search: {search_time:.2f}s, LLM: {llm_time:.2f}s, Total: {total_time:.2f}s")
+        
+        # Store this exchange in session-specific memory
+        memory.add_exchange(question, response)
         
         return response
 
 # Helper function for backwards compatibility
 def get_database():
-    """Create and return a UNYCompassDatabase instance"""
+    """Create and return a UNYCompassDatabase instance (optimized with singleton)"""
     return UNYCompassDatabase()
 
 def main():
-    # Initialize
-    db = UNYCompassDatabase()
+    """Test the optimized system"""
+    print("🚀 Testing Hunter College Optimized RAG + Smart Conversational AI...")
+    
+    # Initialize with optimized singleton pattern
+    db = get_database()
     bot = UNYCompassBot(db)
     
-    print("Hunter College Intermediate RAG + Smart Conversational AI Ready! (Type 'quit' to exit)")
-    print("Features: Advanced RAG + Your Smart Prompting + Enhanced Memory + Frustration Handling")
+    print("✅ Hunter College Intermediate RAG + Smart Conversational AI Ready! (Type 'quit' to exit)")
+    print("🎯 Features: Optimized Performance + Advanced RAG + Smart Prompting + Enhanced Memory + Frustration Handling")
     
     while True:
         try:
@@ -942,8 +972,13 @@ def main():
                 print("Goodbye! Good luck with your studies!")
                 break
                 
-            else:
-                print(f"\nAdvisor: {bot.answer_question(user_input)}")
+            start_time = time.time()
+            response = bot.answer_question(user_input)
+            response_time = time.time() - start_time
+            
+            print(f"\nAdvisor: {response}")
+            print(f"[Response time: {response_time:.2f}s]")
+            
         except KeyboardInterrupt:
             break
 
