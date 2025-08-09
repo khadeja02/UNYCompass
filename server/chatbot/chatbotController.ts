@@ -4,7 +4,7 @@ import { ChatbotService } from "./chatbotService";
 export class ChatbotController {
     static async ask(req: any, res: Response) {
         try {
-            const { question, personalityType } = req.body;
+            const { question } = req.body;
 
             if (!question || !question.trim()) {
                 return res.status(400).json({
@@ -13,10 +13,10 @@ export class ChatbotController {
                 });
             }
 
-            console.log(`🚀 User ${req.user.username} (${personalityType || 'no personality'}) asked: "${question}"`);
+            console.log(`🚀 User ${req.user.username} asked: "${question}"`);
 
-            // Call Python chatbot with personality context
-            const response = await ChatbotService.askQuestion(question, personalityType);
+            // Call Python chatbot with NO personality context
+            const response = await ChatbotService.askQuestion(question);
 
             console.log(`🤖 ChatbotService response:`, {
                 success: response.success,
@@ -40,7 +40,6 @@ export class ChatbotController {
                 question: (response as any).question,
                 answer: (response as any).answer,
                 user: req.user.username,
-                personalityType: personalityType || null,
                 timestamp: new Date().toISOString()
             });
 

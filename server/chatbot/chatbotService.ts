@@ -11,23 +11,15 @@ export class ChatbotService {
         console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
     }
 
-    static async callFlaskChatbot(question: string, personalityType?: string) {
+    static async callFlaskChatbot(question: string) {
         try {
-            // Build contextual question with personality if provided
-            let contextualQuestion = question;
-            if (personalityType && personalityType !== 'chatbot' && personalityType !== 'unknown') {
-                contextualQuestion = `I am a ${personalityType.toUpperCase()} personality type. ${question}`;
-            }
-
             const endpoint = `${this.FLASK_API_URL}/api/chatbot/ask`;
             console.log(`🌐 Calling Flask API: ${endpoint}`);
-            console.log(`📝 Question: "${contextualQuestion.substring(0, 100)}${contextualQuestion.length > 100 ? '...' : ''}"`);
-            console.log(`🎭 Personality Type: ${personalityType || 'none'}`);
+            console.log(`📝 Question: "${question.substring(0, 100)}${question.length > 100 ? '...' : ''}"`);
 
-            // FIXED: Send both message and personalityType to match Flask API expectations
+            // SIMPLIFIED: Send only the message, no personality context
             const requestPayload = {
-                message: contextualQuestion,
-                personalityType: personalityType || null
+                message: question
             };
             console.log(`📦 Request payload:`, JSON.stringify(requestPayload, null, 2));
 
@@ -47,11 +39,11 @@ export class ChatbotService {
                 fullResponse: response.data
             });
 
-            // FIXED: Handle the Flask API response format properly
+            // Handle the Flask API response format
             return {
                 success: true,
                 question: response.data.question,
-                answer: response.data.response || response.data.answer, // Flask returns 'response' field
+                answer: response.data.response || response.data.answer,
                 response: response.data.response || response.data.answer,
                 timestamp: response.data.timestamp
             };
@@ -118,14 +110,13 @@ export class ChatbotService {
         }
     }
 
-    static async askQuestion(question: string, personalityType?: string) {
+    static async askQuestion(question: string) {
         console.log(`🤖 ChatbotService.askQuestion called:`, {
             question: question.substring(0, 50) + '...',
-            personalityType,
             flaskUrl: this.FLASK_API_URL
         });
 
-        const result = await this.callFlaskChatbot(question, personalityType);
+        const result = await this.callFlaskChatbot(question);
 
         console.log(`🤖 ChatbotService.askQuestion result:`, {
             success: result.success,

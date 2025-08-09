@@ -17,7 +17,71 @@ current_dir = Path(__file__).parent
 load_dotenv(dotenv_path=current_dir / "../api/hunter_api-key.env")
 load_dotenv(dotenv_path=current_dir / "../api/pinecone_api-key.env")
 
-class UNYCompassDatabase:
+class UNYCompassBot:
+    def __init__(self, vector_db):
+        self.vector_db = vector_db
+        self.llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.8)
+        # 🔄 CHANGED: Store multiple memories by session ID
+        self.session_memories = {}  # Dictionary: {session_id: ConversationMemory}
+    
+    def get_memory_for_session(self, session_id):
+        """Get or create conversation memory for a specific session"""
+        if session_id not in self.session_memories:
+            print(f"🆕 Creating new conversation memory for session {session_id}")
+            self.session_memories[session_id] = ConversationMemory()
+        return self.session_memories[session_id]
+    
+    def clear_session_memory(self, session_id):
+        """Clear memory for a specific session"""
+        if session_id in self.session_memories:
+            del self.session_memories[session_id]
+            print(f"🗑️ Cleared conversation memory for session {session_id}")
+    
+    def answer_question(self, question, session_id=None):
+        """Updated to use session-specific memory"""
+        
+        # Get session-specific memory
+        if session_id:
+            memory = self.get_memory_for_session(session_id)
+        else:
+            # Fallback for backward compatibility
+            memory = ConversationMemory()
+        
+        # Enhanced search with better retrieval
+        chunks = self.vector_db.search(question, top_k=8)
+        context = "\n\n".join(chunks) if chunks else "Limited information available."
+        
+        # Detect what type of question this is
+        question_type = self.detect_question_type(question)
+        
+        # Route to appropriate handler with session-specific memory
+        if question_type == 'direct_info':
+            response = self.handle_direct_info(question, context, memory)
+        elif question_type == 'exploration':
+            response = self.handle_exploration_question(question, context, memory)
+        elif question_type == 'frustration':
+            response = self.handle_frustration(question, context, memory)
+        elif question_type == 'specific_program':
+            response = self.handle_specific_program(question, context, memory)
+        else:
+            # General response with session memory
+            conversation_context = memory.get_conversation_context()
+            prompt = f"""You are a helpful Hunter College advisor. Answer the student's question naturally and conversationally.
+
+{conversation_context}
+
+Hunter College information: {context}
+
+Student question: {question}
+
+Be helpful, friendly, and conversational. Avoid excessive formatting."""
+            
+            response = self.llm.invoke(prompt).content
+        
+        # Store this exchange in session-specific memory
+        memory.add_exchange(question, response)
+        
+        return response
     def __init__(self, index_name="uny-compass-intermediate"):
         self.index_name = index_name
         self.namespace = "hunter-intermediate"

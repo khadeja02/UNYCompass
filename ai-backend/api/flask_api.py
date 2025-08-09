@@ -62,7 +62,7 @@ def ask_question(question):
         return {"error": "Question cannot be empty"}
     
     try:
-        # Use the SAME bot instance for all requests
+        # Use the SAME bot instance for all requests - NO personality context
         answer = bot.answer_question(question.strip())
         
         return {
@@ -131,19 +131,13 @@ def chatbot_ask():
     if not data or 'message' not in data:
         return jsonify({"error": "Please provide a 'message' field in your request"}), 400
     
-    # FIXED: Extract both message and personalityType
     message = data['message']
-    personality_type = data.get('personalityType')  # Get personality type if provided
+    session_id = data.get('session_id')  # 🆕 Get session ID from request
     
-    print(f"🎭 Received personality type: {personality_type}")
+    print(f"🤖 Received message for session {session_id}: {message}")
     
-    # Enhanced question processing with personality context
-    if personality_type and personality_type not in ['chatbot', 'unknown', None]:
-        # Add personality context to the bot's memory or processing
-        enhanced_message = f"[Student has {personality_type} personality type] {message}"
-        response = ask_question(enhanced_message)
-    else:
-        response = ask_question(message)
+    # Call with session ID for proper memory isolation
+    response = ask_question_with_session(message, session_id)
     
     if "error" in response:
         return jsonify(response), 500
@@ -152,22 +146,41 @@ def chatbot_ask():
         "question": response["question"],
         "response": response["answer"],
         "timestamp": response["timestamp"],
-        "personality_type": personality_type  # Return it back for confirmation
+        "session_id": session_id
     })
+def ask_question_with_session(question, session_id=None):
+    """Ask a question to the chatbot with session-specific memory"""
+    if not CHATBOT_READY:
+        return {"error": f"Chatbot not available: {CHATBOT_ERROR}"}
+    
+    if not question or not question.strip():
+        return {"error": "Question cannot be empty"}
+    
+    try:
+        answer = bot.answer_question(question.strip(), session_id=session_id)
+        
+        return {
+            "success": True,
+            "question": question,
+            "answer": answer,
+            "timestamp": str(datetime.now())
+        }
+        
+    except Exception as e:
+        return {"error": f"Error processing question: {str(e)}"}
 
 # Optional: Reset conversation memory endpoint
-@app.route('/api/chatbot/reset', methods=['POST'])
-def reset_conversation():
-    """Reset the conversation memory for a fresh start"""
+@app.route('/api/chatbot/reset/<int:session_id>', methods=['POST'])
+def reset_session_memory(session_id):
+    """Reset memory for a specific session"""
     if not CHATBOT_READY:
         return jsonify({"error": "Chatbot not available"}), 500
     
     try:
-        # Reset the conversation memory
-        bot.memory = type(bot.memory)()  # Create new memory instance
-        return jsonify({"message": "Conversation memory reset successfully"})
+        bot.clear_session_memory(session_id)
+        return jsonify({"message": f"Memory reset for session {session_id}"})
     except Exception as e:
-        return jsonify({"error": f"Failed to reset conversation: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to reset session memory: {str(e)}"}), 500
 
 if __name__ == '__main__':
     # Change to port 5001 to avoid conflict with your main Express server
