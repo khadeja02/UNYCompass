@@ -3,7 +3,7 @@ import axios from 'axios';
 // OPTIMIZATION: Create persistent axios instance with connection pooling
 const flaskApiClient = axios.create({
     baseURL: process.env.FLASK_API_URL || "https://unycompass-production.up.railway.app",
-    timeout: 30000, // Reduced from 120s to 30s for faster feedback
+    timeout: 120000, // Reduced from 120s to 30s for faster feedback
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
