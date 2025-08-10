@@ -96,9 +96,15 @@ export class DbStorage implements IStorage {
       .orderBy(messages.createdAt);
   }
 
-  async getRecentMessages(sessionId: number, limit: number): Promise<Message[]> {
+  async getRecentMessages(sessionId: number, limit: number = 6): Promise<Message[]> {
     return await db
-      .select()
+      .select({
+        id: messages.id,
+        chatSessionId: messages.chatSessionId,
+        content: messages.content,
+        isUser: messages.isUser,
+        createdAt: messages.createdAt
+      })
       .from(messages)
       .where(eq(messages.chatSessionId, sessionId))
       .orderBy(desc(messages.createdAt))
