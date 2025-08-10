@@ -148,17 +148,28 @@ def chatbot_ask():
     
     print(f"🤖 Received message for UI session {ui_session_id}: {message[:50]}...")
     
-    # ✅ Call without session_id - same as terminal behavior
-    response = ask_question_with_session(message, session_id=None)
     
-    if "error" in response:
-        return jsonify(response), 500
+    try:
+        start_time = time.time()
+        answer = bot.answer_question(message.strip())  # ← Same as terminal!
+        processing_time = time.time() - start_time
+        
+        response = {
+            "success": True,
+            "question": message,
+            "answer": answer,
+            "timestamp": str(datetime.now()),
+            "processing_time": processing_time
+        }
+    except Exception as e:
+        print(f"❌ Error processing question: {e}")
+        return jsonify({"error": f"Error processing question: {str(e)}"}), 500
     
     return jsonify({
         "question": response["question"],
         "response": response["answer"],
         "timestamp": response["timestamp"],
-        "ui_session_id": ui_session_id,  # Return for frontend tracking
+        "ui_session_id": ui_session_id,
         "processing_time": response.get("processing_time")
     })
 
