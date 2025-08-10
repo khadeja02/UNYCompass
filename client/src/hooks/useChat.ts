@@ -314,17 +314,10 @@ export const useChat = () => {
         console.log('🆕 Starting new Hunter AI conversation');
         setCurrentSessionId(null);
         setMessageInput("");
-        setMessages([]);
+        setMessages([]); // Keep messages empty to show welcome screen
         setPendingMessage(null);
 
-        const welcomeMessage: Message = {
-            id: Date.now(),
-            chatSessionId: 0,
-            content: "Hi! I'm Hunter AI, your personal advisor for Hunter College. I can help you with majors, programs, requirements, and more. What would you like to know?",
-            isUser: false,
-            createdAt: new Date(),
-        };
-        setMessages([welcomeMessage]);
+        // Don't add welcome message - let the PersonalitySelector component show instead
     };
 
     // 📋 SELECT EXISTING CHAT SESSION
