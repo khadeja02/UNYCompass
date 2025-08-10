@@ -4,7 +4,7 @@ import { ChatbotService } from "./chatbotService";
 export class ChatbotController {
     static async ask(req: any, res: Response) {
         try {
-            const { question } = req.body;
+            const { question, chatSessionId } = req.body; // ✅ FIXED: Extract session ID
 
             if (!question || !question.trim()) {
                 return res.status(400).json({
@@ -13,14 +13,15 @@ export class ChatbotController {
                 });
             }
 
-            console.log(`🚀 User ${req.user.username} asked: "${question}"`);
+            console.log(`🚀 User ${req.user.username} asked: "${question}" in session ${chatSessionId}`);
 
-            // Call Python chatbot with NO personality context
-            const response = await ChatbotService.askQuestion(question);
+            // ✅ FIXED: Pass session ID to Flask API for proper memory isolation
+            const response = await ChatbotService.askQuestion(question, chatSessionId);
 
             console.log(`🤖 ChatbotService response:`, {
                 success: response.success,
                 hasAnswer: !!(response as any).answer,
+                sessionId: chatSessionId,
                 error: (response as any).error || 'none'
             });
 
@@ -40,6 +41,7 @@ export class ChatbotController {
                 question: (response as any).question,
                 answer: (response as any).answer,
                 user: req.user.username,
+                sessionId: chatSessionId, // ✅ Include session ID in response
                 timestamp: new Date().toISOString()
             });
 
@@ -81,6 +83,39 @@ export class ChatbotController {
                 debugInfo: {
                     errorInController: true
                 }
+            });
+        }
+    }
+
+    // ✅ NEW: Add endpoint to clear session memory
+    static async clearSession(req: any, res: Response) {
+        try {
+            const { sessionId } = req.params;
+
+            if (!sessionId) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Session ID is required'
+                });
+            }
+
+            console.log(`🗑️ Clearing chatbot memory for session ${sessionId}`);
+
+            // This calls the Flask API endpoint to clear session memory
+            const response = await ChatbotService.clearSessionMemory(parseInt(sessionId));
+
+            res.json({
+                success: true,
+                message: `Session ${sessionId} memory cleared`,
+                details: response
+            });
+
+        } catch (error: any) {
+            console.error('❌ Clear session error:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to clear session memory',
+                details: error.message
             });
         }
     }
