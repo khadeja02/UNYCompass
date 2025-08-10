@@ -144,12 +144,12 @@ def chatbot_ask():
         return jsonify({"error": "Please provide a 'message' field in your request"}), 400
     
     message = data['message']
-    session_id = data.get('session_id')  # Get session ID from request
+    ui_session_id = data.get('ui_session_id')  # For logging only
     
-    print(f"🤖 Received message for session {session_id}: {message[:50]}...")
+    print(f"🤖 Received message for UI session {ui_session_id}: {message[:50]}...")
     
-    # Call with session ID for proper memory isolation
-    response = ask_question_with_session(message, session_id)
+    # ✅ Call without session_id - same as terminal behavior
+    response = ask_question_with_session(message, session_id=None)
     
     if "error" in response:
         return jsonify(response), 500
@@ -158,7 +158,7 @@ def chatbot_ask():
         "question": response["question"],
         "response": response["answer"],
         "timestamp": response["timestamp"],
-        "session_id": session_id,
+        "ui_session_id": ui_session_id,  # Return for frontend tracking
         "processing_time": response.get("processing_time")
     })
 
@@ -227,3 +227,4 @@ if __name__ == '__main__':
     # The initialization already happened above when the module loaded
     print("🚀 Flask API ready - chatbot pre-initialized!")
     app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
+    

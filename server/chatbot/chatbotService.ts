@@ -16,8 +16,8 @@ const flaskApiClient = axios.create({
 // Add request/response interceptors for debugging
 flaskApiClient.interceptors.request.use(request => {
     console.log(`🌐 Flask API Request: ${request.method?.toUpperCase()} ${request.url}`);
-    if (request.data?.session_id) {
-        console.log(`📋 Session ID: ${request.data.session_id}`);
+    if (request.data?.ui_session_id) {
+        console.log(`📋 UI Session ID: ${request.data.ui_session_id}`);
     }
     return request;
 });
@@ -39,25 +39,23 @@ export class ChatbotService {
     private static readonly FLASK_API_URL = process.env.FLASK_API_URL || "https://unycompass-production.up.railway.app";
 
     static {
-        console.log('🔍 ChatbotService Enhanced Config:');
+        console.log('🔍 ChatbotService Stateless Config:');
         console.log('🔍 FLASK_API_URL:', this.FLASK_API_URL);
-        console.log('🔍 Session management: ENABLED');
+        console.log('🔍 AI Session management: DISABLED (terminal-like behavior)');
+        console.log('🔍 UI Session tracking: ENABLED');
     }
 
     static async callFlaskChatbot(question: string, sessionId?: number) {
         try {
             const startTime = Date.now();
-            console.log(`🤖 Calling Flask API for session ${sessionId}: "${question.substring(0, 50)}..."`);
-
-            // ✅ CRITICAL FIX: Always include session ID, use unique ID if none provided
-            const effectiveSessionId = sessionId || Date.now(); // Generate unique session ID
+            console.log(`🤖 Calling Flask API for UI session ${sessionId}: "${question.substring(0, 50)}..."`);
 
             const requestPayload = {
                 message: question,
-                session_id: effectiveSessionId // ✅ This ensures Flask uses session-specific memory
+                // ✅ No AI session management - stateless like terminal
+                // ✅ Keep UI session for logging/tracking only
+                ui_session_id: sessionId
             };
-
-            console.log(`📋 Using session ID: ${effectiveSessionId}`);
 
             const response = await flaskApiClient.post('/api/chatbot/ask', requestPayload);
 
@@ -65,7 +63,6 @@ export class ChatbotService {
             console.log(`✅ Flask response received in ${responseTime}ms:`, {
                 status: response.status,
                 hasAnswer: !!(response.data.response || response.data.answer),
-                sessionId: response.data.session_id,
                 processingTime: response.data.processing_time
             });
 
@@ -75,7 +72,7 @@ export class ChatbotService {
                 answer: response.data.response || response.data.answer,
                 response: response.data.response || response.data.answer,
                 timestamp: response.data.timestamp,
-                session_id: effectiveSessionId,
+                ui_session_id: sessionId,
                 responseTime: responseTime,
                 processingTime: response.data.processing_time
             };
@@ -124,19 +121,19 @@ export class ChatbotService {
     }
 
     static async askQuestion(question: string, sessionId?: number) {
-        console.log(`🤖 ChatbotService.askQuestion:`, {
+        console.log(`🤖 ChatbotService.askQuestion (stateless mode):`, {
             question: question.substring(0, 50) + '...',
-            sessionId: sessionId,
+            uiSessionId: sessionId,
             flaskUrl: this.FLASK_API_URL
         });
 
-        // ✅ IMPORTANT: Always pass session ID to maintain proper isolation
+        // ✅ Call stateless Flask API (no AI session memory)
         const result = await this.callFlaskChatbot(question, sessionId);
 
         console.log(`🤖 ChatbotService.askQuestion result:`, {
             success: result.success,
             hasAnswer: !!(result as any).answer,
-            sessionId: (result as any).session_id,
+            uiSessionId: sessionId,
             responseTime: (result as any).responseTime,
             error: (result as any).error || 'none'
         });
@@ -144,27 +141,8 @@ export class ChatbotService {
         return result;
     }
 
-    // ✅ NEW: Clear session memory
-    static async clearSessionMemory(sessionId: number) {
-        try {
-            console.log(`🗑️ Clearing Flask API session memory for ${sessionId}...`);
-
-            const response = await flaskApiClient.post(`/api/chatbot/reset/${sessionId}`);
-
-            console.log(`✅ Session ${sessionId} memory cleared:`, response.data);
-            return {
-                success: true,
-                message: response.data.message
-            };
-
-        } catch (error: any) {
-            console.error(`❌ Error clearing session ${sessionId}:`, error.message);
-            return {
-                success: false,
-                error: error.message
-            };
-        }
-    }
+    // ❌ REMOVED: Clear session memory (no longer applicable in stateless mode)
+    // Session clearing not needed since AI doesn't maintain memory
 
     static async checkStatus() {
         try {
@@ -218,7 +196,6 @@ export class ChatbotService {
         }
     }
 
-    // ✅ ENHANCED: Warmup with session support
     static async warmup() {
         try {
             console.log('🔥 Warming up Flask API...');
