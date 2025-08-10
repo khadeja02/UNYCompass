@@ -66,53 +66,35 @@ export class ChatController {
         }
     };
 
+    // ✅ FIXED: Don't automatically generate AI responses - just save messages
     createMessage = async (req: any, res: Response) => {
         try {
             const validatedData = req.body;
 
-            const userMessage = await ChatService.createMessage(validatedData);
+            // Always save the message first
+            const message = await ChatService.createMessage(validatedData);
 
-            if (validatedData.isUser) {
+            // ✅ CRITICAL FIX: Only generate AI response if explicitly requested
+            const shouldGenerateAIResponse = req.body.generateAIResponse === true;
+
+            if (validatedData.isUser && shouldGenerateAIResponse) {
+                // This is the old logic - only used if explicitly requested
                 try {
-                    const recentMessages = await ChatService.getRecentMessages(
-                        validatedData.chatSessionId,
-                        8
+                    console.log('🤖 Generating AI response via chat system (legacy mode)');
+
+                    const chatbotResponse = await ChatbotService.callFlaskChatbot(
+                        validatedData.content,
+                        validatedData.chatSessionId
                     );
 
-                    const contextString = recentMessages.length > 0
-                        ? recentMessages
-                            .map(msg => `${msg.isUser ? "User" : "Assistant"}: ${msg.content}`)
-                            .join("\n") + "\n\n"
-                        : "";
+                    let aiResponseContent: string;
 
-                    const fullPrompt = `${contextString}User: ${validatedData.content}`;
-
-                    console.log('🔍 DEBUG: About to call ChatbotService.callFlaskChatbot');
-                    console.log('🔍 DEBUG: Full prompt length:', fullPrompt.length);
-                    console.log('🔍 DEBUG: Full prompt preview:', fullPrompt.substring(0, 200) + '...');
-
-                    const chatbotResponse = await ChatbotService.callFlaskChatbot(fullPrompt);
-
-                    // 🔍 EXTENSIVE DEBUGGING
-                    console.log('🔍 DEBUG: ChatbotService returned:');
-                    console.log('🔍 DEBUG: Response type:', typeof chatbotResponse);
-                    console.log('🔍 DEBUG: Response keys:', Object.keys(chatbotResponse || {}));
-                    console.log('🔍 DEBUG: chatbotResponse.success:', chatbotResponse?.success);
-                    console.log('🔍 DEBUG: chatbotResponse.answer:', chatbotResponse?.answer?.substring(0, 100) + '...');
-                    console.log('🔍 DEBUG: chatbotResponse.response:', chatbotResponse?.response?.substring(0, 100) + '...');
-                    console.log('🔍 DEBUG: chatbotResponse.error:', chatbotResponse?.error);
-
-                    // Check what's actually happening in the condition
-                    const hasSuccess = chatbotResponse?.success;
-                    const hasAnswer = chatbotResponse?.answer || chatbotResponse?.response;
-                    console.log('🔍 DEBUG: hasSuccess:', hasSuccess);
-                    console.log('🔍 DEBUG: hasAnswer:', !!hasAnswer);
-
-                    const aiResponseContent = chatbotResponse?.success
-                        ? chatbotResponse.answer || chatbotResponse.response
-                        : `FALLBACK TRIGGERED: success=${chatbotResponse?.success}, error=${chatbotResponse?.error}`;
-
-                    console.log('🔍 DEBUG: Final AI content preview:', aiResponseContent.substring(0, 200) + '...');
+                    if (chatbotResponse?.success) {
+                        aiResponseContent = chatbotResponse.answer || chatbotResponse.response || 'No response content';
+                    } else {
+                        aiResponseContent = `I'm sorry, I encountered an error: ${chatbotResponse?.error || 'Unknown error'}`;
+                        console.error('❌ Chatbot error:', chatbotResponse?.error);
+                    }
 
                     const aiResponse = await ChatService.createMessage({
                         chatSessionId: validatedData.chatSessionId,
@@ -121,25 +103,30 @@ export class ChatController {
                     });
 
                     await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
-                    res.json({ userMessage, aiResponse });
+                    res.json({ userMessage: message, aiResponse });
 
                 } catch (error) {
-                    console.error("🔍 DEBUG: Caught error in try/catch:");
-                    console.error("🔍 DEBUG: Error type:", typeof error);
-                    console.error("🔍 DEBUG: Error message:", error instanceof Error ? error.message : 'Not an Error object');
-                    console.error("🔍 DEBUG: Error stack:", error instanceof Error ? error.stack : 'No stack');
+                    console.error("❌ Error calling Flask API:", error);
 
                     const fallbackResponse = await ChatService.createMessage({
                         chatSessionId: validatedData.chatSessionId,
-                        content: `CAUGHT ERROR: ${error instanceof Error ? error.message : 'Unknown error type'}`,
+                        content: `I'm sorry, I'm having trouble connecting to my knowledge base right now. Please try again in a moment.`,
                         isUser: false,
                     });
 
                     await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
-                    res.json({ userMessage, aiResponse: fallbackResponse });
+                    res.json({ userMessage: message, aiResponse: fallbackResponse });
                 }
             } else {
-                res.json(userMessage);
+                // ✅ NEW DEFAULT: Just save the message, no AI response
+                console.log('💾 Saving message without generating AI response:', {
+                    sessionId: validatedData.chatSessionId,
+                    isUser: validatedData.isUser,
+                    contentPreview: validatedData.content?.substring(0, 50) + '...'
+                });
+
+                await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
+                res.json(message);
             }
         } catch (error) {
             console.error("Create message error:", error);
@@ -167,6 +154,24 @@ export class ChatController {
         } catch (error) {
             console.error("Get messages error:", error);
             res.status(500).json({ message: "Failed to fetch messages" });
+        }
+    };
+
+    // ✅ NEW: Legacy endpoint for old-style chat with AI (if needed)
+    createMessageWithAI = async (req: any, res: Response) => {
+        try {
+            const validatedData = { ...req.body, generateAIResponse: true };
+
+            // Call the main createMessage method with AI generation enabled
+            req.body = validatedData;
+            await this.createMessage(req, res);
+
+        } catch (error) {
+            console.error("Create message with AI error:", error);
+            res.status(500).json({
+                message: "Failed to create message with AI",
+                error: error instanceof Error ? error.message : "Unknown error"
+            });
         }
     };
 }
