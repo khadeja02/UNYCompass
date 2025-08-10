@@ -10,7 +10,5 @@ router.post('/ask', authenticateToken, ChatbotController.ask);
 // Check chatbot status endpoint
 router.get('/status', authenticateToken, ChatbotController.status);
 
-// ✅ NEW: Clear session memory endpoint
-router.post('/reset/:sessionId', authenticateToken, ChatbotController.clearSession);
 
 export default router;

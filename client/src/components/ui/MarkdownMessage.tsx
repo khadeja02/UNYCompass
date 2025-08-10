@@ -44,10 +44,9 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
     };
 
     const components = {
-        pre: (props: React.ComponentProps<'pre'>) => {
-            const { children, ...restProps } = props;
+        pre: ({ children, ...props }: React.ComponentProps<'pre'>) => {
             const codeText = extractTextContent(children);
-            const codeId = `code-${Math.random().toString(36).substr(2, 9)}`;
+            const codeId = `code-${Math.random().toString(36).slice(2, 11)}`;
 
             return (
                 <div className="relative group my-4">
@@ -62,26 +61,31 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
                             {copiedCode === codeId ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                         </Button>
                     </div>
-                    <pre {...restProps} className="bg-gray-900 text-gray-100 p-4 rounded-b-lg overflow-x-auto border-0 m-0">
+                    <pre
+                        {...props}
+                        className="bg-gray-900 text-gray-100 p-4 rounded-b-lg overflow-x-auto border-0 m-0"
+                    >
                         {children}
                     </pre>
                 </div>
             );
         },
 
-        code: (props: React.ComponentProps<'code'>) => {
-            const { children, className, ...restProps } = props;
+        code: ({ children, className, ...props }: React.ComponentProps<'code'>) => {
             const isInline = !className || !className.includes('language-');
 
             if (isInline) {
                 return (
-                    <code className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono" {...restProps}>
+                    <code
+                        className="bg-gray-100 dark:bg-gray-800 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded text-sm font-mono"
+                        {...props}
+                    >
                         {children}
                     </code>
                 );
             }
 
-            return <code className={className} {...restProps}>{children}</code>;
+            return <code className={className} {...props}>{children}</code>;
         },
 
         h1: (props: React.ComponentProps<'h1'>) => (
@@ -94,23 +98,52 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
             <h3 className="text-lg font-medium mt-4 mb-2 text-gray-900 dark:text-gray-100" {...props} />
         ),
 
-        // Clean list styling like Claude
         ul: (props: React.ComponentProps<'ul'>) => (
-            <ul className="my-3 ml-4 space-y-1" {...props}>
-                {props.children}
-            </ul>
+            <ul className="my-3 ml-6 list-disc space-y-1.5" {...props} />
         ),
-
         ol: (props: React.ComponentProps<'ol'>) => (
-            <ol className="my-3 ml-4 space-y-1" {...props}>
-                {props.children}
-            </ol>
+            <ol className="my-3 ml-6 list-decimal space-y-1.5" {...props} />
         ),
 
-        li: (props: React.ComponentProps<'li'>) => (
-            <li className="text-gray-700 dark:text-gray-300 leading-relaxed" {...props}>
-                {props.children}
-            </li>
+        li: ({ children, className, ...props }: React.ComponentProps<'li'>) => {
+            const fullText = extractTextContent(children).trim();
+            const match = fullText.match(/^([^:]+:)\s*(.*)$/);
+            const headingLike = !!match;
+
+            return (
+                <li
+                    className={cn(
+                        "text-gray-700 dark:text-gray-300 leading-relaxed",
+                        headingLike
+                            ? "list-none -ml-6 font-medium"
+                            : "pl-1 marker:text-gray-500 dark:marker:text-gray-400",
+                        className
+                    )}
+                    {...props}
+                >
+                    {headingLike ? (
+                        <>
+                            <span className="font-medium">{match[1]}</span>
+                            {match[2] ? ` ${match[2]}` : null}
+                        </>
+                    ) : (
+                        children
+                    )}
+                </li>
+            );
+        },
+
+        'ul ul': (props: React.ComponentProps<'ul'>) => (
+            <ul className="ml-4 mt-1 list-[circle] space-y-1" {...props} />
+        ),
+        'ol ol': (props: React.ComponentProps<'ol'>) => (
+            <ol className="ml-4 mt-1 list-[lower-latin] space-y-1" {...props} />
+        ),
+        'ul ol': (props: React.ComponentProps<'ol'>) => (
+            <ol className="ml-4 mt-1 list-[lower-latin] space-y-1" {...props} />
+        ),
+        'ol ul': (props: React.ComponentProps<'ul'>) => (
+            <ul className="ml-4 mt-1 list-[circle] space-y-1" {...props} />
         ),
 
         blockquote: (props: React.ComponentProps<'blockquote'>) => (
@@ -133,9 +166,16 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
             <a href={props.href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline" {...props} />
         ),
 
-        // Regular paragraphs - no bullets
         p: (props: React.ComponentProps<'p'>) => (
             <p className="mb-3 leading-relaxed text-gray-700 dark:text-gray-300 last:mb-0" {...props} />
+        ),
+
+        input: (props: React.ComponentProps<'input'>) => (
+            <input
+                type="checkbox"
+                className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
+                {...props}
+            />
         ),
     };
 
@@ -148,7 +188,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
     }
 
     return (
-        <div className={cn("prose-like", className)}>
+        <div className={cn("markdown-container max-w-full", className)}>
             <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
