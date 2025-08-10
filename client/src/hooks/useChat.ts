@@ -133,16 +133,7 @@ export const useChat = () => {
             setMessages([]);
             queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
 
-            // Send welcome message for new sessions
-            const welcomeMessage: Message = {
-                id: Date.now(),
-                chatSessionId: session.id,
-                content: "Hi! I'm Hunter AI, your personal advisor for Hunter College. I can help you with majors, programs, requirements, and more. What would you like to know?",
-                isUser: false,
-                createdAt: new Date(),
-            };
-
-            // Add welcome message to the new session
+            // Send pending message if there is one
             setTimeout(() => {
                 if (pendingMessage) {
                     sendMessageMutation.mutate(pendingMessage);
@@ -156,7 +147,7 @@ export const useChat = () => {
         }
     });
 
-    // 📤 SEND MESSAGE TO HUNTER AI VIA SERVER
+    // ✅ FIXED: Use direct chatbot API instead of chat system
     const sendMessageMutation = useMutation({
         mutationFn: async (content: string) => {
             if (!currentSessionId) {
@@ -168,15 +159,14 @@ export const useChat = () => {
                 throw new Error('Hunter AI is currently offline. Please try again later.');
             }
 
-            console.log('📤 Sending message to Hunter AI via server:', {
+            console.log('📤 Sending message via DIRECT chatbot API:', {
                 sessionId: currentSessionId,
-                content: content.substring(0, 50) + '...',
-                personalityType: selectedPersonalityType
+                content: content.substring(0, 50) + '...'
             });
 
             // Add optimistic user message immediately
             const tempUserMessage: Message = {
-                id: -Date.now(), // Use negative number for temp messages
+                id: -Date.now(),
                 chatSessionId: currentSessionId,
                 content: content,
                 isUser: true,
@@ -188,35 +178,72 @@ export const useChat = () => {
                 (oldMessages: Message[] = []) => [...oldMessages, tempUserMessage]
             );
 
-            // Send to server (which will call Hunter AI Flask API)
-            const response = await apiRequest("POST", "/api/messages", {
-                chatSessionId: currentSessionId,
-                content,
-                isUser: true,
-                personalityType: selectedPersonalityType // Include personality for Hunter AI
+            // ✅ FIXED: Call direct chatbot API (bypasses chat system double context issue)
+            const chatbotResponse = await apiRequest("POST", "/api/chatbot/ask", {
+                question: content,
+                chatSessionId: currentSessionId
             });
 
-            if (!response.ok) {
+            if (!chatbotResponse.ok) {
                 // Remove temp message on error
                 queryClient.setQueryData(
                     ["/api/messages", currentSessionId],
                     (oldMessages: Message[] = []) => oldMessages.filter(msg => msg.id !== tempUserMessage.id)
                 );
 
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to send message to Hunter AI');
+                const errorData = await chatbotResponse.json();
+                throw new Error(errorData.error || 'Failed to get chatbot response');
             }
 
-            return response.json();
+            const chatbotData = await chatbotResponse.json();
+
+            // ✅ Save both messages to database for persistence
+            try {
+                // Save user message to database
+                await apiRequest("POST", "/api/messages", {
+                    chatSessionId: currentSessionId,
+                    content: content,
+                    isUser: true
+                });
+
+                // Save AI response to database
+                await apiRequest("POST", "/api/messages", {
+                    chatSessionId: currentSessionId,
+                    content: chatbotData.answer,
+                    isUser: false
+                });
+
+                console.log('💾 Messages saved to database successfully');
+
+            } catch (saveError) {
+                console.warn('⚠️ Failed to save to database but chatbot responded:', saveError);
+                // Continue anyway since we got a chatbot response
+            }
+
+            return {
+                userMessage: {
+                    id: Date.now(),
+                    chatSessionId: currentSessionId,
+                    content: content,
+                    isUser: true,
+                    createdAt: new Date()
+                },
+                aiResponse: {
+                    id: Date.now() + 1,
+                    chatSessionId: currentSessionId,
+                    content: chatbotData.answer,
+                    isUser: false,
+                    createdAt: new Date()
+                }
+            };
         },
         onSuccess: (data) => {
-            console.log('✅ Hunter AI response received via server:', {
+            console.log('✅ Direct chatbot response received:', {
                 hasUserMessage: !!data.userMessage,
                 hasAiResponse: !!data.aiResponse
             });
 
-            // The server returns both userMessage and aiResponse from Hunter AI
-            // Replace the entire messages cache with fresh data from server
+            // Refresh messages from database
             if (currentSessionId) {
                 queryClient.invalidateQueries({ queryKey: ["/api/messages", currentSessionId] });
                 queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
@@ -224,8 +251,8 @@ export const useChat = () => {
             setMessageInput("");
         },
         onError: (error) => {
-            console.error('❌ Hunter AI message error:', error);
-            alert('Failed to send message to Hunter AI: ' + (error instanceof Error ? error.message : 'Unknown error'));
+            console.error('❌ Direct chatbot error:', error);
+            alert('Failed to get response: ' + (error instanceof Error ? error.message : 'Unknown error'));
         }
     });
 
