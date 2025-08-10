@@ -99,6 +99,47 @@ export class ChatService {
         }
     }
 
+    // 🚀 Streamlined batch save for conversation pairs
+    static async saveConversationPair(userMessageData: any, aiResponseData: any) {
+        try {
+            // Validate both messages
+            const validatedUserData = insertMessageSchema.parse(userMessageData);
+            const validatedAiData = insertMessageSchema.parse(aiResponseData);
+
+            if (!validatedUserData.chatSessionId || !validatedAiData.chatSessionId) {
+                throw new Error('chatSessionId is required for both messages');
+            }
+
+            if (validatedUserData.chatSessionId !== validatedAiData.chatSessionId) {
+                throw new Error('Both messages must belong to the same session');
+            }
+
+            console.log('💾 Saving conversation pair for session:', validatedUserData.chatSessionId);
+
+            // Save both messages in sequence
+            const userMessage = await storage.createMessage(validatedUserData);
+            const aiMessage = await storage.createMessage(validatedAiData);
+
+            console.log('✅ Conversation pair saved successfully:', {
+                sessionId: validatedUserData.chatSessionId,
+                userMessageId: userMessage.id,
+                aiMessageId: aiMessage.id
+            });
+
+            return {
+                userMessage,
+                aiMessage
+            };
+
+        } catch (error) {
+            console.error('❌ Error saving conversation pair:', error);
+            if (error instanceof Error) {
+                throw error;
+            }
+            throw new Error('Unknown error during conversation pair creation');
+        }
+    }
+
     static async getMessagesBySessionId(sessionId: number) {
         try {
             if (!sessionId) {

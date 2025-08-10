@@ -120,7 +120,6 @@ export const useChat = () => {
         mutationFn: async (data: { personalityType?: string; title?: string }) => {
             console.log('🆕 Creating new Hunter AI chat session:', data);
 
-            // Create session with personality type
             const response = await apiRequest("POST", "/api/chat-sessions", {
                 personalityType: data.personalityType || selectedPersonalityType,
                 title: data.title || 'Hunter AI Chat'
@@ -133,7 +132,6 @@ export const useChat = () => {
             setMessages([]);
             queryClient.invalidateQueries({ queryKey: ["/api/chat-sessions"] });
 
-            // Send pending message if there is one
             setTimeout(() => {
                 if (pendingMessage) {
                     sendMessageMutation.mutate(pendingMessage);
@@ -147,24 +145,23 @@ export const useChat = () => {
         }
     });
 
-    // ✅ FIXED: Use direct chatbot API instead of chat system
+    // 🚀 STREAMLINED: Use existing /ask endpoint with new streamlined backend
     const sendMessageMutation = useMutation({
         mutationFn: async (content: string) => {
             if (!currentSessionId) {
                 throw new Error("No active session");
             }
 
-            // Check if Hunter AI is available
             if (chatbotStatus.status === 'offline') {
                 throw new Error('Hunter AI is currently offline. Please try again later.');
             }
 
-            console.log('📤 Sending message via DIRECT chatbot API:', {
+            console.log('🚀 Sending message via streamlined /ask endpoint:', {
                 sessionId: currentSessionId,
                 content: content.substring(0, 50) + '...'
             });
 
-            // Add optimistic user message immediately
+            // Add optimistic user message immediately for instant UI feedback
             const tempUserMessage: Message = {
                 id: -Date.now(),
                 chatSessionId: currentSessionId,
@@ -178,69 +175,58 @@ export const useChat = () => {
                 (oldMessages: Message[] = []) => [...oldMessages, tempUserMessage]
             );
 
-            // ✅ FIXED: Call direct chatbot API (bypasses chat system double context issue)
-            const chatbotResponse = await apiRequest("POST", "/api/chatbot/ask", {
+            // Call streamlined /ask endpoint (Flask API → Save both messages)
+            const response = await apiRequest("POST", "/api/chatbot/ask", {
                 question: content,
                 chatSessionId: currentSessionId
             });
 
-            if (!chatbotResponse.ok) {
+            if (!response.ok) {
                 // Remove temp message on error
                 queryClient.setQueryData(
                     ["/api/messages", currentSessionId],
                     (oldMessages: Message[] = []) => oldMessages.filter(msg => msg.id !== tempUserMessage.id)
                 );
 
-                const errorData = await chatbotResponse.json();
+                const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to get chatbot response');
             }
 
-            const chatbotData = await chatbotResponse.json();
+            const data = await response.json();
 
-            // ✅ Save both messages to database for persistence
-            try {
-                // Save user message to database
-                await apiRequest("POST", "/api/messages", {
-                    chatSessionId: currentSessionId,
-                    content: content,
-                    isUser: true
-                });
-
-                // Save AI response to database
-                await apiRequest("POST", "/api/messages", {
-                    chatSessionId: currentSessionId,
-                    content: chatbotData.answer,
-                    isUser: false
-                });
-
-                console.log('💾 Messages saved to database successfully');
-
-            } catch (saveError) {
-                console.warn('⚠️ Failed to save to database but chatbot responded:', saveError);
-                // Continue anyway since we got a chatbot response
-            }
+            console.log('✅ Streamlined response received:', {
+                hasAnswer: !!data.answer,
+                processingTime: data.processingTime,
+                totalTime: data.totalTime,
+                hasSavedMessages: !!(data.userMessage && data.aiMessage)
+            });
 
             return {
-                userMessage: {
+                userMessage: data.userMessage || {
                     id: Date.now(),
                     chatSessionId: currentSessionId,
                     content: content,
                     isUser: true,
                     createdAt: new Date()
                 },
-                aiResponse: {
+                aiResponse: data.aiMessage || {
                     id: Date.now() + 1,
                     chatSessionId: currentSessionId,
-                    content: chatbotData.answer,
+                    content: data.answer,
                     isUser: false,
                     createdAt: new Date()
-                }
+                },
+                answer: data.answer,
+                processingTime: data.processingTime,
+                totalTime: data.totalTime
             };
         },
         onSuccess: (data) => {
-            console.log('✅ Direct chatbot response received:', {
+            console.log('✅ Streamlined message flow completed:', {
                 hasUserMessage: !!data.userMessage,
-                hasAiResponse: !!data.aiResponse
+                hasAiResponse: !!data.aiResponse,
+                processingTime: data.processingTime,
+                totalTime: data.totalTime
             });
 
             // Refresh messages from database
@@ -251,7 +237,7 @@ export const useChat = () => {
             setMessageInput("");
         },
         onError: (error) => {
-            console.error('❌ Direct chatbot error:', error);
+            console.error('❌ Streamlined flow error:', error);
             alert('Failed to get response: ' + (error instanceof Error ? error.message : 'Unknown error'));
         }
     });
@@ -289,7 +275,6 @@ export const useChat = () => {
             hasSession: !!currentSessionId
         });
 
-        // Check if Hunter AI is available
         if (chatbotStatus.status === 'offline') {
             alert('Hunter AI is currently offline. Please try again later.');
             return;
@@ -299,8 +284,8 @@ export const useChat = () => {
         setMessageInput("");
 
         if (currentSessionId) {
-            // For existing sessions, send with optimistic update
-            console.log('📤 Sending to existing Hunter AI session:', currentSessionId);
+            // For existing sessions, use streamlined flow
+            console.log('📤 Sending to existing Hunter AI session with streamlined /ask:', currentSessionId);
             sendMessageMutation.mutate(messageContent);
         } else {
             // For new sessions, create session first then send message
@@ -332,7 +317,6 @@ export const useChat = () => {
         setMessages([]);
         setPendingMessage(null);
 
-        // Add initial welcome message for new chats
         const welcomeMessage: Message = {
             id: Date.now(),
             chatSessionId: 0,
@@ -423,6 +407,6 @@ export const useChat = () => {
         getStatusBadge,
 
         // 🎯 HUNTER AI FLAGS
-        isUsingChatbot: true, // Always true - this is Hunter AI mode
+        isUsingChatbot: true,
     };
 };
