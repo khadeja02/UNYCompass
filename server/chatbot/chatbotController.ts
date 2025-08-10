@@ -1,162 +1,87 @@
 import { Request, Response } from "express";
-import { ChatService } from "./chatService";
-import { ChatbotService } from "../chatbot/chatbotService";
+import { ChatbotService } from "./chatbotService";
 
-export class ChatController {
-    getPersonalityTypes = async (req: Request, res: Response) => {
+export class ChatbotController {
+    static async ask(req: any, res: Response) {
         try {
-            const types = await ChatService.getPersonalityTypes();
-            res.json(types);
-        } catch (error) {
-            res.status(500).json({ message: "Failed to fetch personality types" });
-        }
-    };
+            const { question } = req.body;
 
-    createChatSession = async (req: any, res: Response) => {
-        try {
-            if (!req.user || !req.user.userId) {
-                console.error("No authenticated user found");
-                return res.status(401).json({
-                    message: "Authentication required",
-                    error: "No user found in request"
+            if (!question || !question.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Question is required'
                 });
             }
 
-            const sessionData = {
-                ...req.body,
-                userId: req.user.userId
-            };
+            console.log(`🚀 User ${req.user.username} asked: "${question}"`);
 
-            const session = await ChatService.createChatSession(sessionData);
-            res.json(session);
-        } catch (error) {
-            console.error("Create chat session error:", error);
+            // Call Python chatbot with NO personality context
+            const response = await ChatbotService.askQuestion(question);
 
-            const errorMessage = error instanceof Error ? error.message : "Unknown error";
-            const errorDetails = error instanceof Error ? error.stack : error;
+            console.log(`🤖 ChatbotService response:`, {
+                success: response.success,
+                hasAnswer: !!(response as any).answer,
+                error: (response as any).error || 'none'
+            });
 
+            // Check if the response indicates an error
+            if (!(response as any).success) {
+                console.error(`❌ Chatbot service error:`, (response as any).error);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Chatbot error',
+                    details: (response as any).error
+                });
+            }
+
+            // ✅ Success response
+            res.json({
+                success: true,
+                question: (response as any).question,
+                answer: (response as any).answer,
+                user: req.user.username,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error: any) {
+            console.error('❌ Chatbot API controller error:', {
+                message: error.message,
+                stack: error.stack?.substring(0, 500)
+            });
             res.status(500).json({
-                message: "Failed to create chat session",
-                error: errorMessage,
-                details: errorDetails
+                success: false,
+                error: 'Internal server error',
+                details: error.message
             });
         }
-    };
+    }
 
-    getChatSessions = async (req: any, res: Response) => {
+    static async status(req: any, res: Response) {
         try {
-            const page = parseInt(req.query.page as string) || 1;
-            const limit = parseInt(req.query.limit as string) || 10;
-            const offset = (page - 1) * limit;
+            console.log('🔍 Checking chatbot status...');
 
-            const totalSessions = await ChatService.getTotalSessionsByUserId(req.user.userId);
-            const sessions = await ChatService.getChatSessionsByUserId(req.user.userId, limit, offset);
+            // Test if Python chatbot is working
+            const testResponse = await ChatbotService.checkStatus();
+            console.log('✅ Status check response:', testResponse);
+
+            const isWorking = (testResponse as any).success;
 
             res.json({
-                sessions,
-                pagination: {
-                    currentPage: page,
-                    totalPages: Math.ceil(totalSessions / limit),
-                    totalSessions,
-                    hasMore: page * limit < totalSessions
+                status: isWorking ? 'online' : 'offline',
+                pythonWorking: isWorking,
+                message: isWorking ? 'Chatbot is ready' : ((testResponse as any).error || 'Chatbot unavailable'),
+                debugInfo: (testResponse as any).debugInfo || {}
+            });
+        } catch (error: any) {
+            console.error('❌ Status check error:', error);
+            res.json({
+                status: 'offline',
+                pythonWorking: false,
+                message: error.message,
+                debugInfo: {
+                    errorInController: true
                 }
             });
-        } catch (error) {
-            res.status(500).json({ message: "Failed to fetch chat sessions" });
         }
-    };
-
-    createMessage = async (req: any, res: Response) => {
-        try {
-            const validatedData = req.body;
-            const userMessage = await ChatService.createMessage(validatedData);
-
-            if (validatedData.isUser) {
-                try {
-                    const dbStart = Date.now();
-                    const recentMessages = await ChatService.getRecentMessages(
-                        validatedData.chatSessionId,
-                        6
-                    );
-                    const dbTime = Date.now() - dbStart;
-                    console.log(`📊 Database query: ${dbTime}ms`);
-
-                    const contextString = recentMessages.length > 0
-                        ? recentMessages
-                            .map(msg => `${msg.isUser ? "User" : "Assistant"}: ${msg.content}`)
-                            .join("\n") + "\n\n"
-                        : "";
-
-                    const fullPrompt = `${contextString}User: ${validatedData.content}`;
-
-                    console.log('🔍 Context length:', contextString.length, 'chars');
-
-                    const chatbotResponse = await ChatbotService.callFlaskChatbot(fullPrompt);
-
-                    console.log('🔍 ChatbotService response:', {
-                        success: chatbotResponse?.success,
-                        hasAnswer: !!(chatbotResponse as any).answer,
-                        error: (chatbotResponse as any).error || 'none'
-                    });
-
-                    if (!(chatbotResponse as any).success) {
-                        console.error(`❌ Chatbot service error:`, (chatbotResponse as any).error);
-                    }
-
-                    const aiResponseContent = chatbotResponse?.success
-                        ? chatbotResponse.answer || chatbotResponse.response
-                        : `FALLBACK: ${(chatbotResponse as any).error}`;
-
-                    const aiResponse = await ChatService.createMessage({
-                        chatSessionId: validatedData.chatSessionId,
-                        content: aiResponseContent,
-                        isUser: false,
-                    });
-
-                    await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
-                    res.json({ userMessage, aiResponse });
-
-                } catch (error: any) {
-                    console.error("Error in createMessage:", error.message);
-
-                    const fallbackResponse = await ChatService.createMessage({
-                        chatSessionId: validatedData.chatSessionId,
-                        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                        isUser: false,
-                    });
-
-                    await ChatService.updateChatSessionTimestamp(validatedData.chatSessionId);
-                    res.json({ userMessage, aiResponse: fallbackResponse });
-                }
-            } else {
-                res.json(userMessage);
-            }
-        } catch (error) {
-            console.error("Create message error:", error);
-            res.status(500).json({
-                message: "Failed to create message",
-                error: error instanceof Error ? error.message : "Unknown error"
-            });
-        }
-    };
-
-    getMessagesBySessionId = async (req: any, res: Response) => {
-        try {
-            const sessionId = parseInt(req.params.sessionId);
-
-            const userSessions = await ChatService.getChatSessionsByUserId(req.user.userId);
-            const sessionExists = userSessions.some(session => session.id === sessionId);
-
-            if (!sessionExists) {
-                console.warn("Access denied to session:", sessionId);
-                return res.status(403).json({ message: "Access denied to this chat session" });
-            }
-
-            const messages = await ChatService.getMessagesBySessionId(sessionId);
-            res.json(messages);
-        } catch (error) {
-            console.error("Get messages error:", error);
-            res.status(500).json({ message: "Failed to fetch messages" });
-        }
-    };
+    }
 }
