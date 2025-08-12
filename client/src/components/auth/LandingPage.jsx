@@ -498,25 +498,26 @@ const LandingPage = ({ switchToLogin }) => {
                             onClick={switchToLogin}
                             style={{
                                 padding: '18px 48px',
-                                background: '#4A5568',
-                                color: 'white',
+                                background: 'transparent',
+                                color: '#4A5568',
                                 fontSize: '18px',
                                 fontWeight: '600',
-                                border: 'none',
+                                border: '2px solid #4A5568',
                                 borderRadius: '25px',
                                 cursor: 'pointer',
-                                boxShadow: '0 8px 24px rgba(74, 85, 104, 0.3)',
                                 transition: 'all 0.3s ease',
                                 letterSpacing: '1px',
                                 transform: `translateY(${scrollY * 0.3}px)`
                             }}
                             onMouseOver={(e) => {
+                                e.target.style.background = '#4A5568';
+                                e.target.style.color = 'white';
                                 e.target.style.transform = 'translateY(-2px)';
-                                e.target.style.boxShadow = '0 12px 32px rgba(74, 85, 104, 0.4)';
                             }}
                             onMouseOut={(e) => {
+                                e.target.style.background = 'transparent';
+                                e.target.style.color = '#4A5568';
                                 e.target.style.transform = 'translateY(0)';
-                                e.target.style.boxShadow = '0 8px 24px rgba(74, 85, 104, 0.3)';
                             }}
                         >
                             Start Exploring
