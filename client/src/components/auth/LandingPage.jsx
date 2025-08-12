@@ -194,7 +194,7 @@ const LandingPage = ({ switchToLogin }) => {
     // Function to calculate distance-based glow effect
     const getGlowStyle = (elementX, elementY) => {
         const distance = Math.sqrt(Math.pow(mousePos.x - elementX, 2) + Math.pow(mousePos.y - elementY, 2));
-        const maxDistance = 200; // Increased detection radius (was 150)
+        const maxDistance = 50; // Increased detection radius (was 150)
         const glowIntensity = Math.max(0, (maxDistance - distance) / maxDistance);
         
         return {
@@ -611,7 +611,7 @@ const LandingPage = ({ switchToLogin }) => {
                                 <div style={{
                                     fontSize: '36px',
                                     fontWeight: '700',
-                                    color: '#4ECDC4',
+                                    color: '#8B5CF6',
                                     marginBottom: '8px'
                                 }}>
                                     {animatedStats.majors}+
@@ -632,7 +632,7 @@ const LandingPage = ({ switchToLogin }) => {
                                 <div style={{
                                     fontSize: '36px',
                                     fontWeight: '700',
-                                    color: '#FF6B6B',
+                                    color: '#8B5CF6',
                                     marginBottom: '8px'
                                 }}>
                                     {animatedStats.universities}+
