@@ -3,7 +3,7 @@ import { ChatbotService } from "./chatbotService";
 import { ChatService } from "../chat/chatService";
 
 export class ChatbotController {
-    // 🚀 Streamlined ask method - Flask API first (stateless), then batch save
+    // Flask API first (stateless), then batch save
     static async ask(req: any, res: Response) {
         try {
             const { question, chatSessionId } = req.body;

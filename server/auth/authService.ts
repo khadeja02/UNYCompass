@@ -182,7 +182,7 @@ export class AuthService {
         // Generate reset token
         const resetToken = crypto.randomBytes(32).toString('hex');
 
-        // FIXED: Use UTC timezone explicitly
+        // Use UTC timezone explicitly
         const expiryResult = await pool.query(`
         SELECT 
             NOW() AT TIME ZONE 'UTC' as current_utc,
@@ -223,7 +223,7 @@ export class AuthService {
         }
     }
 
-    // Reset password with token - EXACT same as before
+    // Reset password with token
     static async resetPassword(token: string, newPassword: string): Promise<void> {
         console.log('🔍 Resetting password with token:', token);
 
@@ -235,7 +235,7 @@ export class AuthService {
             throw new Error('Password must be at least 6 characters long');
         }
 
-        // FIXED: Use UTC timezone for comparison
+        // Use UTC timezone for comparison
         const result = await pool.query(
             'SELECT id, username, email FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW() AT TIME ZONE \'UTC\'',
             [token]
@@ -280,7 +280,7 @@ export class AuthService {
         console.log('✅ Password reset successfully for user:', user.username);
     }
 
-    // Get user by ID - EXACT same logic as original
+    // Get user by ID 
     static async getUserById(userId: number) {
         const result = await pool.query(
             'SELECT id, username, email, created_at FROM users WHERE id = $1',
@@ -290,7 +290,7 @@ export class AuthService {
         return result.rows.length > 0 ? result.rows[0] : null;
     }
 
-    // Update user profile - EXACT same logic as original
+    // Update user profile 
     static async updateProfile(userId: number, email: string) {
         if (!email) {
             throw new Error('Email is required');
@@ -313,7 +313,7 @@ export class AuthService {
         return result.rows[0];
     }
 
-    // Update password - EXACT same logic as original
+    // Update password 
     static async updatePassword(userId: number, currentPassword: string, newPassword: string) {
         if (!currentPassword || !newPassword) {
             throw new Error('Current password and new password are required');
@@ -347,12 +347,12 @@ export class AuthService {
         );
     }
 
-    // Verify JWT token - EXACT same logic as original
+    // Verify JWT token 
     static verifyToken(token: string) {
         return jwt.verify(token, JWT_SECRET!);
     }
 
-    // NEW: Test email functionality
+    //  Test email functionality
     static async testEmail(email: string): Promise<void> {
         try {
             await EmailService.sendTestEmail(email);

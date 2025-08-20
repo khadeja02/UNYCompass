@@ -99,7 +99,7 @@ export class ChatService {
         }
     }
 
-    // 🚀 Streamlined batch save for conversation pairs
+    //  Streamlined batch save for conversation pairs
     static async saveConversationPair(userMessageData: any, aiResponseData: any) {
         try {
             // Validate both messages

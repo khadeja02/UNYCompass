@@ -17,12 +17,7 @@ const ForgotPasswordForm = ({ switchToLogin }) => {
         setSuccess('');
         setIsLoading(true);
 
-        console.log('=== FORGOT PASSWORD DEBUG START ===');
-        console.log('Email:', email);
-
         try {
-            console.log('Making fetch request to /api/auth/forgot-password...');
-
             const response = await fetch(createServerApiUrl('/api/auth/forgot-password'), {
                 method: 'POST',
                 headers: {
@@ -31,30 +26,17 @@ const ForgotPasswordForm = ({ switchToLogin }) => {
                 body: JSON.stringify({ email }),
             });
 
-            console.log('Response received:', response);
-            console.log('Response status:', response.status);
-            console.log('Response ok:', response.ok);
-
             const data = await response.json();
-            console.log('Response data:', data);
 
             if (response.ok) {
-                console.log('Password reset request successful');
                 setSuccess('Password reset link has been sent to your email address. Please check your inbox and follow the instructions.');
-                setEmail(''); // Clear the form
+                setEmail('');
             } else {
-                console.log('Password reset request failed with error:', data.error);
                 setError(data.error || 'Failed to send password reset email');
             }
         } catch (err) {
-            console.log('=== FORGOT PASSWORD CATCH BLOCK TRIGGERED ===');
-            console.log('Error type:', typeof err);
-            console.log('Error message:', err.message);
-            console.log('Full error:', err);
-            console.log('Error stack:', err.stack);
             setError('Network error. Please try again.');
         } finally {
-            console.log('=== FORGOT PASSWORD DEBUG END ===');
             setIsLoading(false);
         }
     };

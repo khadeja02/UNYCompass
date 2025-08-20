@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// OPTIMIZATION: Create persistent axios instance with connection pooling
+// Create persistent axios instance with connection pooling
 const flaskApiClient = axios.create({
     baseURL: process.env.FLASK_API_URL || "https://unycompass-production.up.railway.app",
     timeout: 120000,
@@ -52,8 +52,6 @@ export class ChatbotService {
 
             const requestPayload = {
                 message: question,
-                // ✅ No AI session management - stateless like terminal
-                // ✅ Keep UI session for logging/tracking only
                 ui_session_id: sessionId
             };
 
@@ -127,7 +125,6 @@ export class ChatbotService {
             flaskUrl: this.FLASK_API_URL
         });
 
-        // ✅ Call stateless Flask API (no AI session memory)
         const result = await this.callFlaskChatbot(question, sessionId);
 
         console.log(`🤖 ChatbotService.askQuestion result:`, {
@@ -141,7 +138,7 @@ export class ChatbotService {
         return result;
     }
 
-    // ❌ REMOVED: Clear session memory (no longer applicable in stateless mode)
+
     // Session clearing not needed since AI doesn't maintain memory
 
     static async checkStatus() {

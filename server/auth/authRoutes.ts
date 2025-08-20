@@ -5,7 +5,7 @@ import { authenticateToken } from './authMiddleware';
 
 const router = Router();
 
-// Register new user - EXACT same as original
+// Register new user 
 router.post('/register', async (req: Request, res: Response) => {
     try {
         console.error('🔍 REGISTER DEBUG - req.body:', req.body);
@@ -105,7 +105,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 });
 
-// NEW: Forgot Password Route
+
 router.post('/forgot-password', async (req: Request, res: Response) => {
     try {
         console.error('🔍 FORGOT PASSWORD DEBUG - req.body:', req.body);
@@ -133,7 +133,7 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     }
 });
 
-// NEW: Reset Password Route
+
 router.post('/reset-password', async (req: Request, res: Response) => {
     try {
         console.error('🔍 RESET PASSWORD DEBUG - req.body:', req.body);
@@ -179,7 +179,7 @@ router.post('/test', (req: Request, res: Response) => {
     });
 });
 
-// Get user profile - EXACT same as original
+
 router.get('/profile', authenticateToken, async (req: Request, res: Response) => {
     try {
         const user = await AuthService.getUserById(req.user!.userId);
@@ -196,7 +196,7 @@ router.get('/profile', authenticateToken, async (req: Request, res: Response) =>
     }
 });
 
-// Update user profile - EXACT same as original
+
 router.put('/profile', authenticateToken, async (req: Request, res: Response) => {
     try {
         const { email } = req.body;
@@ -222,7 +222,7 @@ router.put('/profile', authenticateToken, async (req: Request, res: Response) =>
     }
 });
 
-// Update password - EXACT same as original
+
 router.put('/password', authenticateToken, async (req: Request, res: Response) => {
     try {
         const { currentPassword, newPassword } = req.body;

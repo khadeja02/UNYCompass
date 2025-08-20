@@ -2,32 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
-// NEW: Import for forgot password functionality
 import ForgotPasswordForm from './ForgotPasswordForm';
-// NEW: Import for landing page functionality
 import LandingPage from './LandingPage';
 
 const AuthPage = () => {
-    // CHANGED: Updated state to handle four views instead of three (added 'landing')
     const [currentView, setCurrentView] = useState('landing'); // 'landing', 'login', 'register', 'forgot-password'
     const { login } = useAuth();
 
-    // NEW: Function to switch to landing view
     const switchToLanding = () => setCurrentView('landing');
     const switchToLogin = () => setCurrentView('login');
     const switchToRegister = () => setCurrentView('register');
-
-    // NEW: Function to switch to forgot password view
     const switchToForgotPassword = () => setCurrentView('forgot-password');
 
     const handleAuthSuccess = (user) => {
         login(user);
     };
 
-    // NEW: Function to render different views based on currentView state
     const renderCurrentView = () => {
         switch (currentView) {
-            // NEW: Case for landing page view
             case 'landing':
                 return <LandingPage switchToLogin={switchToLogin} />;
             case 'login':
@@ -35,7 +27,6 @@ const AuthPage = () => {
                     <LoginForm
                         onLogin={handleAuthSuccess}
                         switchToRegister={switchToRegister}
-                        // NEW: Pass forgot password switch function to LoginForm
                         switchToForgotPassword={switchToForgotPassword}
                     />
                 );
@@ -46,7 +37,6 @@ const AuthPage = () => {
                         switchToLogin={switchToLogin}
                     />
                 );
-            // NEW: Case for forgot password view
             case 'forgot-password':
                 return (
                     <ForgotPasswordForm
@@ -54,12 +44,10 @@ const AuthPage = () => {
                     />
                 );
             default:
-                // CHANGED: Default case now returns landing page instead of login
                 return <LandingPage switchToLogin={switchToLogin} />;
         }
     };
 
-    // CHANGED: Conditional rendering - landing page has its own styling, others use the card layout
     if (currentView === 'landing') {
         return renderCurrentView();
     }
@@ -102,7 +90,6 @@ const AuthPage = () => {
                     }}>COMPASS</h2>
                 </div>
 
-                {/* CHANGED: Now renders different views using renderCurrentView function */}
                 {renderCurrentView()}
             </div>
         </div>

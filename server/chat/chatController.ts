@@ -66,19 +66,16 @@ export class ChatController {
         }
     };
 
-    // ✅ FIXED: Don't automatically generate AI responses - just save messages
+    // Don't automatically generate AI responses - just save messages
     createMessage = async (req: any, res: Response) => {
         try {
             const validatedData = req.body;
-
-            // Always save the message first
             const message = await ChatService.createMessage(validatedData);
 
-            // ✅ CRITICAL FIX: Only generate AI response if explicitly requested
             const shouldGenerateAIResponse = req.body.generateAIResponse === true;
 
             if (validatedData.isUser && shouldGenerateAIResponse) {
-                // This is the old logic - only used if explicitly requested
+
                 try {
                     console.log('🤖 Generating AI response via chat system (legacy mode)');
 
@@ -118,7 +115,7 @@ export class ChatController {
                     res.json({ userMessage: message, aiResponse: fallbackResponse });
                 }
             } else {
-                // ✅ NEW DEFAULT: Just save the message, no AI response
+                // Just save the message, no AI response
                 console.log('💾 Saving message without generating AI response:', {
                     sessionId: validatedData.chatSessionId,
                     isUser: validatedData.isUser,
@@ -157,7 +154,7 @@ export class ChatController {
         }
     };
 
-    // ✅ NEW: Legacy endpoint for old-style chat with AI (if needed)
+    //  Legacy endpoint for old-style chat with AI (if needed)
     createMessageWithAI = async (req: any, res: Response) => {
         try {
             const validatedData = { ...req.body, generateAIResponse: true };
