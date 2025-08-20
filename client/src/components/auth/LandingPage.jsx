@@ -116,32 +116,32 @@ const LandingPage = ({ switchToLogin }) => {
 
         // Animate particles continuously
         const animateParticles = () => {
-            setParticles(prevParticles => 
+            setParticles(prevParticles =>
                 prevParticles.map(particle => {
                     // Calculate distance from mouse for interaction effect
                     const distanceFromMouse = Math.sqrt(
                         Math.pow(mousePos.x - particle.x, 2) + Math.pow(mousePos.y - particle.y, 2)
                     );
-                    
+
                     // Repel particles from mouse cursor (within 150px radius)
                     let newSpeedX = particle.speedX;
                     let newSpeedY = particle.speedY;
-                    
+
                     if (distanceFromMouse < 150) {
                         const repelForce = (150 - distanceFromMouse) / 150 * 2;
                         const angle = Math.atan2(particle.y - mousePos.y, particle.x - mousePos.x);
                         newSpeedX += Math.cos(angle) * repelForce * 0.02;
                         newSpeedY += Math.sin(angle) * repelForce * 0.02;
                     }
-                    
+
                     // Apply some drag to prevent particles from moving too fast
                     newSpeedX *= 0.98;
                     newSpeedY *= 0.98;
-                    
+
                     // Update particle position
                     let newX = particle.x + newSpeedX;
                     let newY = particle.y + newSpeedY;
-                    
+
                     // Bounce off screen edges
                     if (newX <= 0 || newX >= window.innerWidth) {
                         newSpeedX *= -1;
@@ -151,7 +151,7 @@ const LandingPage = ({ switchToLogin }) => {
                         newSpeedY *= -1;
                         newY = Math.max(0, Math.min(window.innerHeight, newY));
                     }
-                    
+
                     return {
                         ...particle,
                         x: newX,
@@ -196,7 +196,7 @@ const LandingPage = ({ switchToLogin }) => {
         const distance = Math.sqrt(Math.pow(mousePos.x - elementX, 2) + Math.pow(mousePos.y - elementY, 2));
         const maxDistance = 50; // Increased detection radius (was 150)
         const glowIntensity = Math.max(0, (maxDistance - distance) / maxDistance);
-        
+
         return {
             opacity: 0.1 + (glowIntensity * 0.6), // More dramatic opacity increase (was 0.3)
             filter: `drop-shadow(0 0 ${glowIntensity * 40}px rgba(139, 92, 246, ${glowIntensity * 0.9}))` // CHANGED: Larger, more intense glow (was 20px and 0.6 alpha)
@@ -302,14 +302,14 @@ const LandingPage = ({ switchToLogin }) => {
                     top: '10%',
                     left: '5%',
                     animation: 'float 12s ease-in-out infinite',
-                    zIndex : 2
+                    zIndex: 2
                 }}>
                     <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                        <circle cx="30" cy="30" r="25" stroke="#4A5568" strokeWidth="2"/>
-                        <path d="M30 10 L25 25 L30 22 L35 25 Z" fill="#4A5568"/>
-                        <path d="M30 50 L35 35 L30 38 L25 35 Z" fill="#4A5568"/>
-                        <path d="M10 30 L25 25 L22 30 L25 35 Z" fill="#4A5568"/>
-                        <path d="M50 30 L35 35 L38 30 L35 25 Z" fill="#4A5568"/>
+                        <circle cx="30" cy="30" r="25" stroke="#4A5568" strokeWidth="2" />
+                        <path d="M30 10 L25 25 L30 22 L35 25 Z" fill="#4A5568" />
+                        <path d="M30 50 L35 35 L30 38 L25 35 Z" fill="#4A5568" />
+                        <path d="M10 30 L25 25 L22 30 L25 35 Z" fill="#4A5568" />
+                        <path d="M50 30 L35 35 L38 30 L35 25 Z" fill="#4A5568" />
                     </svg>
                 </div>
 
@@ -321,8 +321,8 @@ const LandingPage = ({ switchToLogin }) => {
                     zIndex: 2
                 }}>
                     <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                        <path d="M20 5 L35 20 L20 35 L25 20 Z" fill="#4A5568"/>
-                        <path d="M5 20 L25 20" stroke="#4A5568" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M20 5 L35 20 L20 35 L25 20 Z" fill="#4A5568" />
+                        <path d="M5 20 L25 20" stroke="#4A5568" strokeWidth="3" strokeLinecap="round" />
                     </svg>
                 </div>
 
@@ -334,8 +334,8 @@ const LandingPage = ({ switchToLogin }) => {
                     zIndex: 2
                 }}>
                     <svg width="35" height="35" viewBox="0 0 35 35" fill="none">
-                        <circle cx="17.5" cy="17.5" r="15" stroke="#4A5568" strokeWidth="2"/>
-                        <path d="M17.5 7.5 L22.5 17.5 L17.5 15 L12.5 17.5 Z" fill="#4A5568"/>
+                        <circle cx="17.5" cy="17.5" r="15" stroke="#4A5568" strokeWidth="2" />
+                        <path d="M17.5 7.5 L22.5 17.5 L17.5 15 L12.5 17.5 Z" fill="#4A5568" />
                     </svg>
                 </div>
 
@@ -347,7 +347,7 @@ const LandingPage = ({ switchToLogin }) => {
                     zIndex: 2
                 }}>
                     <svg width="45" height="45" viewBox="0 0 45 45" fill="none">
-                        <path d="M22.5 2.5 L25.5 15.5 L37.5 22.5 L25.5 29.5 L22.5 42.5 L19.5 29.5 L7.5 22.5 L19.5 15.5 Z" fill="#4A5568"/>
+                        <path d="M22.5 2.5 L25.5 15.5 L37.5 22.5 L25.5 29.5 L22.5 42.5 L19.5 29.5 L7.5 22.5 L19.5 15.5 Z" fill="#4A5568" />
                     </svg>
                 </div>
 
@@ -359,7 +359,7 @@ const LandingPage = ({ switchToLogin }) => {
                     zIndex: 2
                 }}>
                     <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
-                        <path d="M15 5 L25 15 L15 25 L18 15 Z" fill="#4A5568"/>
+                        <path d="M15 5 L25 15 L15 25 L18 15 Z" fill="#4A5568" />
                     </svg>
                 </div>
 
@@ -371,9 +371,9 @@ const LandingPage = ({ switchToLogin }) => {
                     zIndex: 2
                 }}>
                     <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
-                        <circle cx="25" cy="25" r="20" stroke="#4A5568" strokeWidth="2"/>
-                        <circle cx="25" cy="25" r="12" stroke="#4A5568" strokeWidth="1"/>
-                        <circle cx="25" cy="25" r="2" fill="#4A5568"/>
+                        <circle cx="25" cy="25" r="20" stroke="#4A5568" strokeWidth="2" />
+                        <circle cx="25" cy="25" r="12" stroke="#4A5568" strokeWidth="1" />
+                        <circle cx="25" cy="25" r="2" fill="#4A5568" />
                     </svg>
                 </div>
 
@@ -415,7 +415,7 @@ const LandingPage = ({ switchToLogin }) => {
                     zIndex: 5,
                     minHeight: '100vh' // ====== CHANGED: Ensure first section takes full viewport height ======
                 }}>
-                    <div style={{ 
+                    <div style={{
                         marginBottom: '60px',
                         transform: `translateY(${scrollY * 0.3}px)`,
                         transition: 'transform 0.1s ease-out'
@@ -429,18 +429,18 @@ const LandingPage = ({ switchToLogin }) => {
                             justifyContent: 'center'
                         }}>
                             <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <circle cx="60" cy="60" r="55" stroke="#4A5568" strokeWidth="3" fill="none"/>
-                                <circle cx="60" cy="60" r="45" stroke="#4A5568" strokeWidth="2" fill="none"/>
-                                <path d="M60 25 L50 55 L60 50 L70 55 Z" fill="#4A5568"/>
-                                <path d="M60 95 L70 65 L60 70 L50 65 Z" fill="#718096"/>
-                                <circle cx="60" cy="60" r="4" fill="#4A5568"/>
+                                <circle cx="60" cy="60" r="55" stroke="#4A5568" strokeWidth="3" fill="none" />
+                                <circle cx="60" cy="60" r="45" stroke="#4A5568" strokeWidth="2" fill="none" />
+                                <path d="M60 25 L50 55 L60 50 L70 55 Z" fill="#4A5568" />
+                                <path d="M60 95 L70 65 L60 70 L50 65 Z" fill="#718096" />
+                                <circle cx="60" cy="60" r="4" fill="#4A5568" />
                                 <text x="60" y="20" textAnchor="middle" fontSize="12" fill="#4A5568" fontWeight="bold">N</text>
                                 <text x="100" y="65" textAnchor="middle" fontSize="12" fill="#4A5568" fontWeight="bold">E</text>
                                 <text x="60" y="105" textAnchor="middle" fontSize="12" fill="#4A5568" fontWeight="bold">S</text>
                                 <text x="20" y="65" textAnchor="middle" fontSize="12" fill="#4A5568" fontWeight="bold">W</text>
                             </svg>
                         </div>
-                        
+
                         <h1 style={{
                             fontSize: '64px',
                             fontWeight: '800',
@@ -576,7 +576,7 @@ const LandingPage = ({ switchToLogin }) => {
                         }}>
                             Trusted by Students Worldwide
                         </h2>
-                        
+
                         <div style={{
                             display: 'grid',
                             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -675,8 +675,8 @@ const LandingPage = ({ switchToLogin }) => {
                         aria-label="Back to Top"
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 19V5" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                            <path d="M5 12L12 5L19 12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                            <path d="M12 19V5" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M5 12L12 5L19 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
                         </svg>
                     </button>
                 )}

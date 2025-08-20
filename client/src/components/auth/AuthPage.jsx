@@ -83,7 +83,7 @@ const AuthPage = () => {
                 position: 'relative',
                 overflow: 'hidden'
             }}>
-                
+
                 <div style={{ marginBottom: '40px' }}>
                     <h1 style={{
                         fontSize: '52px',
@@ -101,7 +101,7 @@ const AuthPage = () => {
                         letterSpacing: '1px'
                     }}>COMPASS</h2>
                 </div>
-                
+
                 {/* CHANGED: Now renders different views using renderCurrentView function */}
                 {renderCurrentView()}
             </div>
